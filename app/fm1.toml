@@ -1,0 +1,20 @@
+# MB-1 build settings (fm1-base tools/build.py)
+name = "MB1"
+id_prefix = "FM-1_42"          # package identity: dev FM-1_4200, releases FM-1_42XXYYZZ
+usb_manufacturer = "minibrute-fm1"
+usb_product = "MB-1 FM-1"
+o2 = ["mbvoice/mbvoice.c"]     # the engine, at -O2
+o2_cflags = ["-DMB_FASTMATH"]  # fm1-base's fastmath.h in place of libm
+include = ["mbvoice"]
+words = "words.tsv"
+ble = true                     # Bluetooth MIDI in and out
+tagline = "a Minibrute-style monosynth for the FM-1"
+repo = "https://github.com/leonardolopezchavira/minibrute-fm1"
+licence = "MIT"
+credits = "Built on fm1-base (MPL-2.0) and felucca-bsp, after Felucca by Leo Kuroshita, Hügelton Instruments."
+author = "Leonardo Lopez Chavira"
+description = "An unofficial Minibrute-style monophonic synth for the FM-1, written from scratch and measured against Arturia's MiniBrute V: sawtooth with Ultrasaw, square with PWM, triangle with Metalizer, sub and noise; a resonant multimode filter with Brute Factor; two ADSRs, an LFO, vibrato, glide and a mod wheel on the ALGO knob."
+tags = ["synth"]
+install = "https://leonardolopezchavira.github.io/minibrute-fm1/install/"
+site = "https://leonardolopezchavira.github.io/minibrute-fm1/"
+screenshot = "docs/img/screen-playing.png"

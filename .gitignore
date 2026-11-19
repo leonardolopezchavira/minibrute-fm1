@@ -1,0 +1,8 @@
+build/
+__pycache__/
+*.wav
+*.f32
+.DS_Store
+app/web/*
+# measured plugin data stays private (MB_MEASURED_METAL builds only)
+metal_tables.h

@@ -1,0 +1,126 @@
+# MB-1 in the host simulator: python3 fm1/base/tools/build.py app --host, then
+#   app/build/host/mb1_host app/tests/basic.txt app/build/host
+wait 600
+shot boot.png
+expect slot 0
+expect page 0
+expect note -1
+# a key plays (key 7 is C4), the engine sounds
+wav keys.wav
+key 7 down
+wait 400
+expect note 60
+expect midi_out 1
+shot playing.png
+expect peak_db_min -30
+key 7 up
+wait 600
+wavstop
+expect note -1
+# last-note priority: two keys, the second wins, letting it go goes back to the first
+key 7 down
+wait 50
+key 11 down
+wait 50
+expect note 64
+key 11 up
+wait 50
+expect note 60
+key 7 up
+wait 300
+# K1 on FILTER is the cutoff (parameter 0): down 10; the patch is edited, the engine has it
+turn K1 -10
+wait 60
+expect p0 90
+expect edited 1
+expect posted 1
+# the pages: SEL the oscillators, again OSC 2; HOME back to the filter; SELECT steps
+tap SEL
+wait 30
+expect page 2
+tap SEL
+wait 30
+expect page 3
+shot osc2.png
+tap HOME
+wait 30
+expect page 0
+turn SELECT 1
+wait 30
+expect page 1
+tap ENV
+wait 30
+expect page 4
+shot env.png
+tap LFO
+wait 30
+expect page 6
+tap EDIT
+wait 30
+expect page 8
+tap GLO
+wait 30
+expect page 9
+tap FX
+wait 30
+expect page 10
+# the mod wheel (ALGO) and MIDI CC 1
+turn ALGO 8
+wait 30
+expect wheel 32
+midi B0 01 40
+wait 30
+expect wheel 64
+# a MIDI CC: 71 resonance (parameter 1)
+midi B0 47 64
+wait 60
+expect p1 100
+# MIDI notes
+midi 90 30 64
+wait 100
+expect note 48
+midi 80 30 00
+wait 50
+expect note -1
+# PRESET: the next slot (BASS); SAVE keeps it and the settings across a restart
+turn PRESET 1
+wait 30
+expect slot 1
+expect edited 0
+tap HOME
+wait 30
+key 7 down
+wait 300
+shot bass.png
+key 7 up
+wait 200
+turn K2 5
+wait 30
+tap SAVE
+wait 50
+expect edited 0
+expect dirty 0
+reboot
+wait 600
+expect slot 1
+expect p1 45
+# every factory slot sounds
+turn PRESET 1
+wait 30
+key 7 down
+wait 300
+expect peak_db_min -40
+key 7 up
+wait 200
+turn PRESET 1
+wait 30
+key 7 down
+wait 300
+key 7 up
+wait 200
+turn PRESET 1
+wait 30
+key 7 down
+wait 300
+key 7 up
+wait 200
