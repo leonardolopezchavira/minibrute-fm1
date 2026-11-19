@@ -10,6 +10,7 @@
   "install": "https://leonardolopezchavira.github.io/minibrute-fm1/install/",
   "site": "https://leonardolopezchavira.github.io/minibrute-fm1/",
   "source": "https://github.com/leonardolopezchavira/minibrute-fm1",
+  "screenshot": "docs/img/screen-playing.png",
   "hardware": {
     "models": ["FM-1"],
     "flash": ["EB6014", "856014", "B36014"],

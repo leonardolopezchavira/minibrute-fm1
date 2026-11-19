@@ -800,6 +800,8 @@ static void bar(int32_t x, int32_t y, int32_t w, uint32_t v, uint32_t max, int b
     }
 }
 
+static uint32_t cpu_peak;
+
 static void draw(void)
 {
     char t[24];
@@ -855,11 +857,27 @@ static void draw(void)
     t[1] = (char)('0' + (set.octave < 0 ? -set.octave : set.octave));
     t[2] = 0;
     cv_text(216, 2, &FONT_XS, t, C_HI);
+    {                                        /* the audio load: now, the most since boot, and the blocks missed */
+        uint32_t c = plat_cpu_pct();
+        if (c > cpu_peak)
+            cpu_peak = c;
+        cv_text(4, 16, &FONT_XS, "CPU", C_GRAY);
+        int_text((int32_t)c, t);
+        text_cat(t, "%");
+        cv_text(34, 16, &FONT_XS, t, C_HI);
+        cv_text(80, 16, &FONT_XS, "PEAK", C_GRAY);
+        int_text((int32_t)cpu_peak, t);
+        text_cat(t, "%");
+        cv_text(114, 16, &FONT_XS, t, C_HI);
+        cv_text(160, 16, &FONT_XS, "XRUN", C_GRAY);
+        int_text((int32_t)plat_xruns(), t);
+        cv_text(196, 16, &FONT_XS, t, plat_xruns() ? C_ACCENT : C_HI);
+    }
     {
         uint32_t w = scope_w, j;
         int32_t prev = 0;
         for (j = 0; j < 232u; j++) {
-            int32_t s = scope_cap[(w - 464u + 2u * j) % SCOPE_N], y = 42 - s * 20 / 32768;
+            int32_t s = scope_cap[(w - 464u + 2u * j) % SCOPE_N], y = 47 - s * 15 / 32768;
             if (j)
                 cv_line(3 + (int32_t)j, prev, 4 + (int32_t)j, y, C_DIM);
             prev = y;
@@ -896,7 +914,7 @@ void app_frame(void)
         ui.msg_until = 0;
         ui.redraw = 1;
     }
-    if (voice_note >= 0 && now - ui.last_scope >= 50u) {   /* the scope moves while a note sounds */
+    if (now - ui.last_scope >= (voice_note >= 0 ? 50u : 500u)) {   /* the scope moves while a note sounds; the load */
         ui.last_scope = now;
         ui.redraw = 1;
     }
