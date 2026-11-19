@@ -8,6 +8,8 @@
 #define APP_SPLASH_RGB RGB(240, 96, 40)
 #define APP_BLOCK 256u                   /* frames per audio block: 5.8 ms at 44.1 kHz */
 #define APP_TOUCH                        /* velocity and pressure from the keys (lib/touch.h) */
+#define APP_SYSEX                        /* patches over USB SysEx (app.c: the loader) */
+int app_sysex(const uint8_t *p, uint32_t n);
 
 /* the store: the settings (with the patch being played), the panel calibration and Bluetooth's (the platform's),
  * and the 16 patch slots (in the data area, its first sector) */

@@ -7,18 +7,19 @@
  * (FILT ENV, AMP ENV), LFO the LFO and vibrato, EDIT the performance controls (glide, vintage, the wheel), GLO the
  * rest (sub octave and shape, Ultrasaw rate, level), FX the touch (aftertouch, PW and Metalizer envelope). SELECT
  * steps through every page. ALGO is the mod wheel (MIDI CC 1 too); the keys' pressure is aftertouch. PRESET picks
- * one of 16 patch slots (the first 8 hold factory sounds until saved over), SAVE stores the patch in the slot,
+ * one of 32 patch slots (the first 8 hold factory sounds until saved over), SAVE stores the patch in the slot,
  * OCT- / OCT+ the octave. Every parameter has a MIDI CC (PARAM[].cc), so a controller or a DAW can play them.
  *
  * Part of the unity build (device/unity.c, host/plat_host.c), after the platform: gfx.c and announce.c are in
  * scope. The engine is compiled apart at -O2 (fm1.toml o2). */
 #include "fastmath.h"
 #include "mbvoice.h"
+#include "mb_tapers.h"
 
 #define C_ACCENT RGB(240, 96, 40)       /* the highlight: Minibrute orange */
 
 /* ------------------------------------------------------------- parameters --- */
-enum { T_LVL, T_BIP, T_CUT, T_TIME, T_LFO, T_PW, T_USR, T_VIB, T_GLIDE, T_DB, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
+enum { T_LVL, T_BIP, T_KBD, T_CUT, T_ATT, T_DR, T_LFO, T_PW, T_USR, T_VIB, T_GLIDE, T_DB, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
        T_SUBOCT, T_SUBSHP };
 static const uint8_t ENUM_N[] = {[T_MODE] = 4, [T_LWAVE] = 6, [T_VTYPE] = 3, [T_WDEST] = 3, [T_SUBOCT] = 2,
                                  [T_SUBSHP] = 2};
@@ -43,14 +44,14 @@ typedef struct {
 /* the CCs: 20..31, then 70..101 (none of the reserved or the common ones) */
 static const param_t PARAM[NP] = {
     [P_CUT] = {"CUTOFF", T_CUT, 74},   [P_RES] = {"RESO", T_LVL, 71},     [P_BRUTE] = {"BRUTE", T_LVL, 20},
-    [P_FENV] = {"ENV AMT", T_BIP, 21}, [P_MODE] = {"MODE", T_MODE, 22},   [P_KBD] = {"KBD TRK", T_LVL, 23},
+    [P_FENV] = {"ENV AMT", T_BIP, 21}, [P_MODE] = {"MODE", T_MODE, 22},   [P_KBD] = {"KBD TRK", T_KBD, 23},
     [P_FVEL] = {"ENV VEL", T_LVL, 24}, [P_AVEL] = {"AMP VEL", T_LVL, 25},
     [P_SAW] = {"SAW", T_LVL, 26},      [P_SQR] = {"SQUARE", T_LVL, 27},   [P_TRI] = {"TRI", T_LVL, 28},
     [P_SUB] = {"SUB", T_LVL, 29},      [P_NOISE] = {"NOISE", T_LVL, 30},  [P_ULTRA] = {"ULTRASAW", T_LVL, 31},
     [P_PW] = {"PW", T_PW, 75},         [P_METAL] = {"METAL", T_LVL, 76},
-    [P_FA] = {"ATTACK", T_TIME, 77},   [P_FD] = {"DECAY", T_TIME, 78},    [P_FS] = {"SUSTAIN", T_LVL, 79},
-    [P_FR] = {"RELEASE", T_TIME, 80},  [P_AA] = {"ATTACK", T_TIME, 73},   [P_AD] = {"DECAY", T_TIME, 81},
-    [P_AS] = {"SUSTAIN", T_LVL, 82},   [P_AR] = {"RELEASE", T_TIME, 72},
+    [P_FA] = {"ATTACK", T_ATT, 77},   [P_FD] = {"DECAY", T_DR, 78},    [P_FS] = {"SUSTAIN", T_LVL, 79},
+    [P_FR] = {"RELEASE", T_DR, 80},  [P_AA] = {"ATTACK", T_ATT, 73},   [P_AD] = {"DECAY", T_DR, 81},
+    [P_AS] = {"SUSTAIN", T_LVL, 82},   [P_AR] = {"RELEASE", T_DR, 72},
     [P_LRATE] = {"RATE", T_LFO, 83},   [P_LWAVE] = {"WAVE", T_LWAVE, 84}, [P_LPITCH] = {"PITCH", T_BIP, 85},
     [P_LFILT] = {"FILTER", T_BIP, 86}, [P_LPWM] = {"PWM/MTL", T_BIP, 87}, [P_LAMP] = {"AMP", T_BIP, 88},
     [P_VRATE] = {"VIB RATE", T_VIB, 89}, [P_VTYPE] = {"VIB TYPE", T_VTYPE, 90},
@@ -80,7 +81,7 @@ static const page_t PAGE[] = {
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
 
 /* ---------------------------------------------------------------- patches --- */
-#define NSLOT 16u
+#define NSLOT 32u
 typedef struct {
     char name[8];                        /* upper case, space padded, no terminator needed */
     uint8_t v[NP];
@@ -88,11 +89,11 @@ typedef struct {
 
 /* INIT: a plain sawtooth through an open filter, organ envelope */
 static const uint8_t INIT_V[NP] = {
-    [P_CUT] = 100, [P_RES] = 0, [P_BRUTE] = 0, [P_FENV] = 64, [P_MODE] = 0, [P_KBD] = 0, [P_FVEL] = 0, [P_AVEL] = 0,
-    [P_SAW] = 127, [P_PW] = 0, [P_FA] = 0, [P_FD] = 70, [P_FS] = 0, [P_FR] = 40, [P_AA] = 0, [P_AD] = 60,
-    [P_AS] = 127, [P_AR] = 40, [P_LRATE] = 50, [P_LWAVE] = 0, [P_LPITCH] = 64, [P_LFILT] = 64, [P_LPWM] = 64,
-    [P_LAMP] = 64, [P_VRATE] = 70, [P_VTYPE] = 1, [P_GLIDE] = 0, [P_VINT] = 0, [P_WDEST] = 1, [P_WAMT] = 61,
-    [P_SUBOCT] = 0, [P_SUBSHP] = 0, [P_USRATE] = 50, [P_LEVEL] = 90, [P_PWENV] = 64, [P_MTENV] = 64,
+    [P_CUT] = 96, [P_RES] = 0, [P_BRUTE] = 0, [P_FENV] = 64, [P_MODE] = 0, [P_KBD] = 0, [P_FVEL] = 0, [P_AVEL] = 0,
+    [P_SAW] = 127, [P_PW] = 0, [P_FA] = 0, [P_FD] = 27, [P_FS] = 0, [P_FR] = 5, [P_AA] = 0, [P_AD] = 17,
+    [P_AS] = 127, [P_AR] = 5, [P_LRATE] = 51, [P_LWAVE] = 0, [P_LPITCH] = 64, [P_LFILT] = 64, [P_LPWM] = 64,
+    [P_LAMP] = 64, [P_VRATE] = 57, [P_VTYPE] = 1, [P_GLIDE] = 0, [P_VINT] = 0, [P_WDEST] = 1, [P_WAMT] = 61,
+    [P_SUBOCT] = 0, [P_SUBSHP] = 0, [P_USRATE] = 31, [P_LEVEL] = 60, [P_PWENV] = 64, [P_MTENV] = 64,
 };
 /* the factory sounds: changes from INIT (parameter, value; 0xFF ends) */
 static const struct {
@@ -100,18 +101,18 @@ static const struct {
     uint8_t d[28];
 } FACTORY[] = {
     {"INIT", {0xFF}},
-    {"BASS", {P_SUB, 100, P_CUT, 45, P_RES, 40, P_BRUTE, 60, P_FENV, 100, P_FD, 60, P_AD, 70, P_AS, 100, P_AR, 30,
-              P_KBD, 64, 0xFF}},
-    {"ACID", {P_SAW, 0, P_SQR, 127, P_CUT, 40, P_RES, 100, P_FENV, 110, P_FD, 55, P_GLIDE, 30, P_WDEST, 2,
-              P_AR, 20, 0xFF}},
-    {"METALEAD", {P_SAW, 60, P_TRI, 127, P_METAL, 70, P_CUT, 90, P_RES, 50, P_VINT, 40, P_GLIDE, 15, P_KBD, 100,
+    {"BASS", {P_SUB, 100, P_CUT, 35, P_RES, 40, P_BRUTE, 60, P_FENV, 100, P_FD, 17, P_AD, 27, P_AS, 100, P_AR, 2,
+              P_KBD, 32, 0xFF}},
+    {"ACID", {P_SAW, 0, P_SQR, 127, P_CUT, 30, P_RES, 100, P_FENV, 110, P_FD, 13, P_GLIDE, 27, P_WDEST, 2,
+              P_AR, 1, 0xFF}},
+    {"METALEAD", {P_SAW, 60, P_TRI, 127, P_METAL, 70, P_CUT, 85, P_RES, 50, P_VINT, 40, P_GLIDE, 15, P_KBD, 50,
                   0xFF}},
-    {"ULTRAPAD", {P_ULTRA, 100, P_USRATE, 40, P_CUT, 70, P_RES, 30, P_FENV, 80, P_FA, 80, P_FD, 95, P_FS, 60,
-                  P_AA, 85, P_AD, 90, P_AS, 110, P_AR, 90, 0xFF}},
-    {"PERC", {P_SAW, 0, P_NOISE, 127, P_MODE, 1, P_CUT, 80, P_RES, 90, P_AD, 50, P_AS, 0, P_AR, 50, P_FENV, 90,
-              P_FD, 50, 0xFF}},
-    {"BRASS", {P_SQR, 60, P_CUT, 50, P_FENV, 110, P_FA, 50, P_FD, 75, P_FS, 60, P_AA, 30, P_AR, 50, 0xFF}},
-    {"WOBBLE", {P_SUB, 90, P_CUT, 45, P_RES, 70, P_LRATE, 50, P_LFILT, 110, P_BRUTE, 50, P_WDEST, 0, 0xFF}},
+    {"ULTRAPAD", {P_ULTRA, 100, P_USRATE, 25, P_CUT, 62, P_RES, 30, P_FENV, 80, P_FA, 52, P_FD, 60, P_FS, 60,
+                  P_AA, 59, P_AD, 53, P_AS, 110, P_AR, 53, 0xFF}},
+    {"PERC", {P_SAW, 0, P_NOISE, 127, P_MODE, 1, P_CUT, 73, P_RES, 90, P_AD, 10, P_AS, 0, P_AR, 10, P_FENV, 90,
+              P_FD, 10, 0xFF}},
+    {"BRASS", {P_SQR, 60, P_CUT, 40, P_FENV, 110, P_FA, 16, P_FD, 33, P_FS, 60, P_AA, 5, P_AR, 10, 0xFF}},
+    {"WOBBLE", {P_SUB, 90, P_CUT, 35, P_RES, 70, P_LRATE, 51, P_LFILT, 110, P_BRUTE, 50, P_WDEST, 0, 0xFF}},
 };
 #define NFACTORY (sizeof FACTORY / sizeof FACTORY[0])
 
@@ -136,7 +137,7 @@ static void patch_factory(patch_t *p, uint32_t slot)
         p->v[FACTORY[slot].d[i]] = FACTORY[slot].d[i + 1u];
 }
 
-#define BANK_MAGIC 0x4D423142u           /* "MB1B" */
+#define BANK_MAGIC 0x4D423143u           /* "MB1C": 32 slots ("MB1B": 0.1's 16) */
 typedef struct {
     uint32_t magic;
     patch_t slot[NSLOT];
@@ -158,14 +159,24 @@ static uint8_t set_dirty;
 /* ---------------------------------------------------------------- mapping --- */
 static float lvl(uint32_t x) { return (float)x * (1.0f / 127.0f); }
 static float bip(uint32_t x) { return fm_clampf(((float)x - 64.0f) * (1.0f / 63.0f), -1.0f, 1.0f); }
-static float expo(uint32_t x, float lo, float ratio) { return lo * fm_exp2f(fm_log2f(ratio) * lvl(x)); }
-static float cut_hz(uint32_t x) { return expo(x, 20.0f, 1000.0f); }          /* 20 Hz .. 20 kHz */
-static float time_s(uint32_t x) { return expo(x, 0.001f, 10000.0f); }        /* 1 ms .. 10 s */
-static float lfo_hz(uint32_t x) { return expo(x, 0.1f, 1000.0f); }           /* 0.1 .. 100 Hz */
-static float usr_hz(uint32_t x) { return expo(x, 0.1f, 100.0f); }            /* 0.1 .. 10 Hz */
-static float vib_hz(uint32_t x) { return expo(x, 0.5f, 40.0f); }             /* 0.5 .. 20 Hz */
-static float glide_s(uint32_t x) { return x ? expo(x, 0.005f, 1000.0f) : 0.0f; }   /* off, 5 ms .. 5 s an octave */
-static float level_db(uint32_t x) { return ((float)x - 100.0f) * 0.3f; }     /* -30 .. +8 dB, 0 dB at 100 */
+/* the knobs as the plugin's (mb_tapers.h): x 0..127 is the plugin's 0..1 */
+static float taper(const float *t, uint32_t x)
+{
+    float f = lvl(x) * (float)(TP_N - 1);
+    uint32_t i = (uint32_t)f;
+    if (i >= TP_N - 1u)
+        return t[TP_N - 1];
+    return t[i] + (t[i + 1u] - t[i]) * (f - (float)i);
+}
+static float cut_hz(uint32_t x) { return taper(TP_CUT, x); }        /* 20 Hz .. 20 kHz */
+static float att_s(uint32_t x) { return taper(TP_ATT, x); }         /* 1 ms .. 12.5 s */
+static float dr_s(uint32_t x) { return taper(TP_DR, x); }           /* 1 ms .. 25 s */
+static float lfo_hz(uint32_t x) { return taper(TP_LFO, x); }        /* 0.05 .. 100 Hz */
+static float usr_hz(uint32_t x) { return taper(TP_USR, x); }        /* 0.005 .. 43 Hz */
+static float vib_hz(uint32_t x) { return taper(TP_VIB, x); }        /* 1 .. 50 Hz */
+static float glide_s(uint32_t x) { return taper(TP_GLIDE, x); }     /* 0 .. 2 s an octave */
+static float level_db(uint32_t x) { return taper(TP_DB, x); }       /* -60 .. 0 dB, the plugin's master */
+#define LEVEL_OFFSET_DB 9.0f             /* MB-1's output above the plugin's master level */
 
 static void params_from(const uint8_t *v, MBParams *p)
 {
@@ -188,16 +199,16 @@ static void params_from(const uint8_t *v, MBParams *p)
     p->resonance = lvl(v[P_RES]);
     p->brute = lvl(v[P_BRUTE]);
     p->fenv_amt = bip(v[P_FENV]);
-    p->keytrack = lvl(v[P_KBD]);
+    p->keytrack = 2.0f * lvl(v[P_KBD]);   /* 0 .. 200 % */
     p->fenv_vel = lvl(v[P_FVEL]);
-    p->f_a = time_s(v[P_FA]);
-    p->f_d = time_s(v[P_FD]);
+    p->f_a = att_s(v[P_FA]);
+    p->f_d = dr_s(v[P_FD]);
     p->f_s = lvl(v[P_FS]);
-    p->f_r = time_s(v[P_FR]);
-    p->a_a = time_s(v[P_AA]);
-    p->a_d = time_s(v[P_AD]);
+    p->f_r = dr_s(v[P_FR]);
+    p->a_a = att_s(v[P_AA]);
+    p->a_d = dr_s(v[P_AD]);
     p->a_s = lvl(v[P_AS]);
-    p->a_r = time_s(v[P_AR]);
+    p->a_r = dr_s(v[P_AR]);
     p->amp_vel = lvl(v[P_AVEL]);
     p->lfo_wave = v[P_LWAVE];
     p->lfo_rate_hz = lfo_hz(v[P_LRATE]);
@@ -213,7 +224,7 @@ static void params_from(const uint8_t *v, MBParams *p)
     p->at_cut = lvl(v[P_ATCUT]);
     p->glide_s_oct = glide_s(v[P_GLIDE]);
     p->vintage = lvl(v[P_VINT]);
-    p->master_db = level_db(v[P_LEVEL]);
+    p->master_db = level_db(v[P_LEVEL]) + LEVEL_OFFSET_DB;
 }
 
 /* ----------------------------------------------------------------- engine --- */
@@ -425,6 +436,74 @@ void app_init(void)
     events();                                /* (no audio yet: the patch in place before the first render) */
 }
 
+/* ------------------------------------------------------------ the loader --- */
+/* patches over USB SysEx: F0 7D 4D 42 CMD ... F7 (7D: non-commercial; "MB")
+ *   01 SLOT NAME[8] V[NP]   a patch into a slot (SLOT 0..31; NAME ASCII; V: each parameter 0..127, PARAM's order);
+ *                           kept in RAM until 02. The slot playing: played at once
+ *   02                      the slots stored in the flash
+ *   03                      the factory slots back (stored)
+ *   04 SLOT                 a slot played (as PRESET)
+ * A frame's answer: F0 7D 4D 42 7F CMD STATUS F7 (STATUS 0 done, 1 refused) */
+static uint8_t bank_loaded;                  /* slots came in over SysEx since the last store */
+static void name_text(const patch_t *p, char *b);
+static void sysex_answer(uint32_t cmd, uint32_t st)
+{
+    uint8_t a[8] = {0xF0, 0x7D, 0x4D, 0x42, 0x7F, (uint8_t)cmd, (uint8_t)st, 0xF7};
+    (void)plat_sysex_send(a, sizeof a);
+}
+static int bank_store(void)
+{
+    int r = plat_store_save(OBJ_BANK, &bank, sizeof bank);
+    if (r == 0)
+        r = plat_store_save(OBJ_SETTINGS, &set, sizeof set);   /* (the slot playing, too) */
+    if (r == 0) {
+        bank_loaded = 0;
+        set_dirty = 0;
+    }
+    return r;
+}
+int app_sysex(const uint8_t *p, uint32_t n)
+{
+    uint32_t cmd, i;
+    char t[16];
+    if (n < 4u || p[0] != 0x7Du || p[1] != 0x4Du || p[2] != 0x42u)
+        return 0;
+    cmd = p[3];
+    if (cmd == 1u && n == 5u + 8u + NP && p[4] < NSLOT) {
+        patch_t *d = &bank.slot[p[4]];
+        for (i = 0; i < 8u; i++)
+            d->name[i] = p[5u + i] >= 32u && p[5u + i] < 127u ? (char)p[5u + i] : ' ';
+        for (i = 0; i < NP; i++)
+            d->v[i] = (uint8_t)(p[13u + i] > pmax(i) ? pmax(i) : p[13u + i]);
+        bank_loaded = 1;
+        if (p[4] == set.slot)
+            slot_load(set.slot);
+        sysex_answer(cmd, 0);
+    } else if (cmd == 2u && n == 4u) {
+        i = (uint32_t)bank_store();
+        app_say(i ? "STORE" : "PATCHES", i ? "FAILED" : "STORED");
+        sysex_answer(cmd, i ? 1u : 0u);
+    } else if (cmd == 3u && n == 4u) {
+        for (i = 0; i < NSLOT; i++)
+            patch_factory(&bank.slot[i], i);
+        i = (uint32_t)bank_store();
+        slot_load(set.slot);
+        app_say("FACTORY", i ? "FAILED" : "PATCHES");
+        sysex_answer(cmd, i ? 1u : 0u);
+    } else if (cmd == 4u && n == 5u && p[4] < NSLOT) {
+        slot_load(p[4]);
+        sysex_answer(cmd, 0);
+    } else {
+        sysex_answer(cmd, 1);
+        return 1;
+    }
+    if (cmd == 1u || cmd == 4u) {
+        name_text(&set.cur, t);
+        app_say("LOADED", t);
+    }
+    return 1;
+}
+
 /* --------------------------------------------------------------------- UI --- */
 static struct {
     char msg[2][24];
@@ -516,8 +595,15 @@ static void value_text(uint32_t i, uint32_t x, char *b)
     case T_CUT:
         hz_text(cut_hz(x), b);
         break;
-    case T_TIME:
-        time_text(time_s(x), b);
+    case T_KBD:
+        int_text((int32_t)(x * 200u + 63u) / 127, b);
+        text_cat(b, "%");
+        break;
+    case T_ATT:
+        time_text(att_s(x), b);
+        break;
+    case T_DR:
+        time_text(dr_s(x), b);
         break;
     case T_LFO:
         hz_text(lfo_hz(x), b);
@@ -539,14 +625,12 @@ static void value_text(uint32_t i, uint32_t x, char *b)
             time_text(glide_s(x), b);
         break;
     case T_DB: {
-        int32_t d = ((int32_t)x - 100) * 3;  /* tenths of a dB */
-        if (d > 0)
-            text_cat(b, "+");
-        if (d < 0) {
+        float d = level_db(x);
+        if (d < -0.05f) {
             text_cat(b, "-");
             d = -d;
         }
-        dec1_text((float)d * 0.1f, b + (b[0] != 0));
+        dec1_text(d, b + (b[0] != 0));
         text_cat(b, " DB");
         break;
     }

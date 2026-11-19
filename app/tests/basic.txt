@@ -31,7 +31,7 @@ wait 300
 # K1 on FILTER is the cutoff (parameter 0): down 10; the patch is edited, the engine has it
 turn K1 -10
 wait 60
-expect p0 90
+expect p0 86
 expect edited 1
 expect posted 1
 # the pages: SEL the oscillators, again OSC 2; HOME back to the filter; SELECT steps
@@ -124,3 +124,27 @@ key 7 down
 wait 300
 key 7 up
 wait 200
+# the loader: a patch into slot 3 over SysEx (name TESTPAT, cutoff 10, the rest 64), played, then stored
+sysex F0 7D 4D 42 01 02 54 45 53 54 50 41 54 20 0A 40 40 40 00 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 01 40 40 40 40 40 40 40 01 40 00 01 40 40 40 40 40 40 40 F7
+wait 30
+expect_sysex F0 7D 4D 42 7F 01 00 F7
+sysex F0 7D 4D 42 04 02 F7
+wait 30
+expect slot 2
+expect p0 10
+key 7 down
+wait 300
+shot loaded.png
+key 7 up
+wait 200
+sysex F0 7D 4D 42 02 F7
+wait 30
+expect_sysex F0 7D 4D 42 7F 02 00 F7
+reboot
+wait 600
+expect slot 2
+expect p0 10
+# the factory slots back
+sysex F0 7D 4D 42 03 F7
+wait 30
+expect p0 30
