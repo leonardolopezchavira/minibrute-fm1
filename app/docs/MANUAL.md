@@ -19,7 +19,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | HOME, SEL, ENV, LFO, EDIT, GLO, FX | A page; pressed again, its next page (FX: TOUCH, DELAY, REVERB, FX 2, DIST, CHORUS, COMP; the button of the page on screen is lit) |
 | SELECT | Steps through every page |
 | ALGO | The mod wheel (sent as MIDI CC 1 too). Where it goes: PERFORM, WHEEL TO |
-| PRESET | The patch slot, 1..32. Turning it loads the slot (unsaved changes are dropped) |
+| PRESET | The patch slot, A01..D32: 128 slots in four banks of 32. Turning it loads the slot (unsaved changes are dropped) |
 | SAVE | Stores the patch in its slot, and the settings (lit when there is something to save) |
 | OCT- / OCT+ | The keyboard's octave, -2..+2 |
 | ARP | The arpeggiator: OFF, ON, HOLD in turn (and its page). Held half a second: its pages, ARP and ARP 2. Lit while it runs, dark a moment on each beat |
@@ -147,8 +147,8 @@ seconds after a change, while stopped; SAVE also stores them) and kept over powe
 
 ## The patches
 
-Slots 1..8 start with factory sounds: INIT, BASS, ACID, METALEAD, ULTRAPAD, PERC, BRASS, WOBBLE. Slots 9..32 start as
-INIT. SAVE writes over the slot shown.
+Slots A01..A08 start with factory sounds: INIT, BASS, ACID, METALEAD, ULTRAPAD, PERC, BRASS, WOBBLE; the rest
+start as INIT. SAVE writes over the slot shown. (Before 0.12 there were 32 slots: they are bank A now, as they were.)
 
 ## The knobs' range
 
@@ -162,15 +162,16 @@ knob is the same setting.
 The site's [patch editor](../edit/) is a MiniBrute-style patch sheet that plays: every value of a patch on one
 panel, in light or dark. It sounds in the browser with MB-1's own engine (the arpeggiator too, at the editor's
 tempo) and, with the FM-1 connected by USB (Chrome or Edge), on the FM-1 as you turn each control. It reads the
-FM-1's 32 slots and the sound playing, stores a patch in a slot, writes a whole bank, opens and saves .syx files,
+FM-1's 128 slots and the sound playing, stores a patch in a slot, writes a whole bank, opens and saves .syx files,
 and exports the sheet as SVG or PNG, or prints it. Reading the FM-1 needs MB-1 0.11.4 or later.
 
 ## Loading patches from a computer
 
-MB-1 takes patches over USB MIDI SysEx (`F0 7D 4D 42 ...`, app/app.c "the loader"): a patch into a slot (01), the
-slots stored (02), the factory patches back (03), a slot played (04), a slot's patch sent back (05; slot 7F: the
-sound playing, edits included), what is there (06: the parameter count, the slots, the slot playing, edited or not),
-and a patch played without a slot (07, as an edit: SAVE keeps it). Each frame is answered.
+MB-1 takes patches over USB MIDI SysEx (`F0 7D 4D 42 ...`, app/app.c "the loader"): a patch into a slot (01; slots
+0..127 are A01..D32), the slots stored (02), bank A's factory patches back (03; banks B..D are left alone), a slot played (04), a slot's patch sent
+back (05), what is there (06: the parameter count, the banks of 32, the slot playing, edited or not), a patch played
+without a slot (07, as an edit: SAVE keeps it), and the sound playing sent back, edits included (08). Each frame is
+answered.
 
 
 MB-1 plays from USB, Bluetooth and TRS MIDI on any channel: notes, pitch bend (VOICE: BEND, 1..12 semitones), the mod wheel (CC 1),

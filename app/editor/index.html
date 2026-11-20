@@ -136,6 +136,7 @@ Connect the FM-1 over USB to read its patches, hear your edits on it as you make
   </div>
   <div class="bank">
     <div class="t"><span>Slots</span><span id="bankst" class="status"></span></div>
+    <div id="banktabs" class="row" role="group" aria-label="Bank" style="margin-bottom:6px"><button>A</button><button>B</button><button>C</button><button>D</button></div>
     <ol id="slots"></ol>
     <div class="row">
       <button id="toslot">Save to slot</button>
@@ -144,7 +145,7 @@ Connect the FM-1 over USB to read its patches, hear your edits on it as you make
       <button id="savebank">Save bank .syx</button>
       <button id="wrall" disabled>Write all to FM-1</button>
     </div>
-    <p class="note">Save to slot puts this patch in the slot picked here, and, connected, stores it on the FM-1.</p>
+    <p class="note">128 slots in four banks, A01 to D32. Save to slot puts this patch in the slot picked here, and, connected, stores it on the FM-1.</p>
   </div>
 </div>
 </main>
@@ -158,7 +159,8 @@ const PN = ["CUT","RES","BRUTE","FENV","MODE","KBD","FVEL","AVEL","SAW","SQR","T
   "ARP","AMODE","AOCT","ASTEP","ASWING","DTIME","DFB","DTONE","DMIX","DSYNC","DMODE","RDECAY","RSIZE","RDAMP","RMIX","RPRE","FXORD",
   "XTYPE","XDRV","XTONE","XMIX","CRATE","CDEPTH","CPHASE","CMIX","KTHR","KRAT","KATT","KREL"];
 const P = Object.fromEntries(PN.map((n, i) => [n, i]));
-const NP = PN.length, NSLOT = 32;
+const NP = PN.length, BANK_N = 32, NBANK = 4, NSLOT = NBANK * BANK_N;   /* A01 .. D32 */
+const slotName = (s) => "ABCD"[Math.floor(s / BANK_N)] + String(s % BANK_N + 1).padStart(2, "0");
 const BIP = new Set(["FENV","LPITCH","LFILT","LPWM","LAMP","PWENV","MTENV"].map((n) => P[n]));
 
 /* the engine (mb1_editor.wasm): the parameters' facts, and a value as the FM-1's screen reads it */
@@ -170,7 +172,8 @@ const valText = (i, x) => (W ? cstr(W.ed_text(i, x, cur.v[P.DSYNC])) : String(x)
 
 const cur = { v: new Array(NP).fill(0), name: "INIT    " };
 const bank = new Array(NSLOT).fill(null);
-let slot = 0;
+let slot = 0, view = 0;   /* the slot picked; the bank shown */
+let fmSlots = NSLOT;     /* the FM-1's (32 before MB-1 0.12) */
 
 /* ------------------------------------------------------------------ the sheet */
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -482,7 +485,7 @@ function frames(bytes) {   /* the MB-1 frames in a .syx: [{cmd, slot, name, v}] 
     const f = bytes.slice(i, j + 1); i = j + 1;
     if (f[1] !== 0x7D || f[2] !== 0x4D || f[3] !== 0x42) continue;
     const cmd = f[4];
-    if (cmd === 1 || cmd === 5) {
+    if (cmd === 1 || cmd === 5 || cmd === 8) {
       const nv = f.length - 15;
       if ([47, 52, 63, 64, 76].includes(nv)) out.push({ cmd, slot: f[5], name: String.fromCharCode(...f.slice(6, 14)), v: Array.from(f.slice(14, 14 + nv)) });
     } else if (cmd === 7) {
@@ -526,9 +529,10 @@ document.getElementById("savebank").addEventListener("click", () => {
 /* the slots list */
 function drawSlots() {
   const ol = document.getElementById("slots"); ol.textContent = "";
-  for (let s = 0; s < NSLOT; s++) {
+  document.querySelectorAll("#banktabs button").forEach((t, k) => { t.classList.toggle("on", k === view); t.setAttribute("aria-pressed", k === view); });
+  for (let s = view * BANK_N; s < (view + 1) * BANK_N; s++) {
     const li = document.createElement("li"), b = document.createElement("button");
-    b.innerHTML = `<span class="n">${String(s + 1).padStart(2, "0")}</span>`;
+    b.innerHTML = `<span class="n">${slotName(s)}</span>`;
     b.append(bank[s] ? bank[s].name.trim() || "—" : "·");
     if (s === slot) { b.classList.add("cur"); b.setAttribute("aria-current", "true"); }
     b.addEventListener("click", async () => {
@@ -541,13 +545,15 @@ function drawSlots() {
     li.appendChild(b); ol.appendChild(li);
   }
 }
+document.querySelectorAll("#banktabs button").forEach((t, k) => t.addEventListener("click", () => { view = k; drawSlots(); }));
 document.getElementById("toslot").addEventListener("click", async () => {
-  if (bank[slot] && !confirm(`Replace slot ${slot + 1} (${bank[slot].name.trim()}) with ${cur.name.trim()}?`)) return;
+  if (slot >= fmSlots && fm) return say(`this FM-1 has ${fmSlots} slots: update MB-1 for 128`, true);
+  if (bank[slot] && !confirm(`Replace ${slotName(slot)} (${bank[slot].name.trim()}) with ${cur.name.trim()}?`)) return;
   bank[slot] = { name: cur.name, v: cur.v.slice(), fm: false }; drawSlots(); dirty(false);
   if (fm) {
     const a = await fmSend(frame01(slot, cur.name, cur.v), 1), b = a === 0 ? await fmSend([...HDR, 2, 0xF7], 2, 4000) : -1;
     if (b === 0) bank[slot].fm = true;
-    say(b === 0 ? `stored in slot ${slot + 1} on the FM-1` : "the FM-1 did not store it", b !== 0);
+    say(b === 0 ? `stored in ${slotName(slot)} on the FM-1` : "the FM-1 did not store it", b !== 0);
   }
 });
 
@@ -796,6 +802,13 @@ async function fmRead(s) {   /* a slot's patch (0x7F: the sound playing) */
   const d = await p; if (!d) return null;
   const f = frames(d)[0]; return f ? { name: f.name, v: fill(f.v), fm: true } : null;
 }
+async function fmReadCur() {   /* the sound playing, edits included (08; 0.11.4: 05 7F) */
+  const old = fmSlots < NSLOT;
+  const p = expect((d) => (old ? d[4] === 5 && d[5] === 0x7F : d[4] === 8), 1500);
+  fm.out.send(old ? [...HDR, 5, 0x7F, 0xF7] : [...HDR, 8, 0xF7]);
+  const d = await p; if (!d) return null;
+  const f = frames(d)[0]; return f ? { name: f.name, v: fill(f.v) } : null;
+}
 async function connect() {
   if (!navigator.requestMIDIAccess) return say("this browser has no Web MIDI: use Chrome or Edge", true);
   try { access = access || await navigator.requestMIDIAccess({ sysex: true }); }
@@ -816,17 +829,19 @@ async function connect() {
   const inp = ins.find((i) => bare(i.name) === bare(pick.out.name)) || ins[0];
   for (const i of ins) if (i !== inp) i.onmidimessage = null;
   fm = { out: pick.out, in: inp, name: pick.out.name };
-  const [, , , , , np, nslot, s, edited] = pick.info;
+  const [, , , , , np, nb, s, edited] = pick.info;
+  fmSlots = nb <= 8 ? nb * BANK_N : nb;   /* (0.12: the banks; 0.11.4: the slots) */
   slot = s; fmUi();
-  say(`MB-1 on ${fm.name}: slot ${s + 1}${edited ? " (edited)" : ""}`);
+  view = Math.floor(s / BANK_N);
+  say(`MB-1 on ${fm.name}: ${slotName(s)}${edited ? " (edited)" : ""}${fmSlots < NSLOT ? " · update MB-1 for 128 slots" : ""}`);
   await readAll();
-  const c = await fmRead(0x7F);
+  const c = await fmReadCur();
   if (c) loadPatch(c.name, c.v, "fm");
-  void np; void nslot;
+  void np;
 }
 async function readAll() {
   if (!fm) return;
-  for (let s = 0; s < NSLOT; s++) { const p = await fmRead(s); if (p) bank[s] = p; document.getElementById("bankst").textContent = `reading ${s + 1}/32`; }
+  for (let s = 0; s < fmSlots; s++) { const p = await fmRead(s); if (p) bank[s] = p; document.getElementById("bankst").textContent = `reading ${s + 1}/${fmSlots}`; }
   document.getElementById("bankst").textContent = ""; drawSlots();
 }
 function fmUi() {
@@ -840,7 +855,7 @@ liveBtn.addEventListener("click", () => { live = !live; liveBtn.classList.toggle
 document.getElementById("wrall").addEventListener("click", async () => {
   if (!fm || !confirm("Write every slot in the list to the FM-1 and store them? Slots that are empty here stay as they are.")) return;
   let ok = 0, n = 0;
-  for (let s = 0; s < NSLOT; s++) if (bank[s]) { n++; if (await fmSend(frame01(s, bank[s].name, bank[s].v), 1) === 0) ok++; }
+  for (let s = 0; s < fmSlots; s++) if (bank[s]) { n++; if (await fmSend(frame01(s, bank[s].name, bank[s].v), 1) === 0) ok++; }
   const st = await fmSend([...HDR, 2, 0xF7], 2, 4000);
   if (st === 0) bank.forEach((b) => { if (b) b.fm = true; });
   say(st === 0 && ok === n ? `${n} slots written and stored` : `written ${ok} of ${n}; ${st === 0 ? "stored" : "not stored"}`, !(st === 0 && ok === n));

@@ -7,7 +7,7 @@
  * (FILT ENV, AMP ENV), LFO the LFO and vibrato, EDIT the performance controls (glide, vintage, the wheel), GLO the
  * rest (MORE: sub octave and shape, Ultrasaw rate, level; VOICE: legato or retrig, bend range, LFO retrigger), FX the touch (aftertouch, PW and Metalizer envelope). SELECT
  * steps through every page. ALGO is the mod wheel (MIDI CC 1 too); the keys' pressure is aftertouch. PRESET picks
- * one of 32 patch slots (the first 8 hold factory sounds until saved over), SAVE stores the patch in the slot,
+ * one of 128 patch slots, four banks of 32, A01 .. D32 (the first 8 hold factory sounds until saved over), SAVE stores the patch in the slot,
  * OCT- / OCT+ the octave. Every parameter has a MIDI CC (PARAM[].cc), so a controller or a DAW can play them.
  *
  * Part of the unity build (device/unity.c, host/plat_host.c), after the platform: gfx.c and announce.c are in
@@ -45,21 +45,37 @@ static const page_t PAGE[] = {
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
 
 /* ---------------------------------------------------------------- patches --- */
-#define NSLOT 32u
+#define NBANK 4u                         /* A..D */
+#define BANK_N 32u                       /* slots a bank (a store object each: 4 + 32 x 84 B, under PLAT_STORE_MAX) */
+#define NSLOT (NBANK * BANK_N)
 #define BANK_MAGIC 0x4D423148u           /* "MB1H": 76 parameters, distortion, chorus, compressor ("MB1G": 0.10.4's 64,
                                          * "MB1F": 0.10's 63, "MB1E": 0.8.2 .. 0.9's 52,
                                          * "MB1D": 0.3 .. 0.8's 47, "MB1C": 0.2's 44, "MB1B": 0.1's 16 slots) */
 typedef struct {
     uint32_t magic;
-    patch_t slot[NSLOT];
+    patch_t slot[BANK_N];
 } bank_t;
-static bank_t bank;
+static bank_t banks[NBANK] PLAT_POOL;    /* (in the pool: main RAM is nearly full) */
+static const uint32_t BANK_OBJ[NBANK] = {OBJ_BANK, OBJ_BANK_B, OBJ_BANK_C, OBJ_BANK_D};
+#define SLOT(s) (banks[(s) / BANK_N].slot[(s) % BANK_N])
+static uint8_t bank_dirty;               /* bit k: bank k changed since stored */
+static int banks_save(void)              /* the banks that changed: 0 = stored */
+{
+    uint32_t k;
+    for (k = 0; k < NBANK; k++)
+        if (bank_dirty & (1u << k)) {
+            if (plat_store_save(BANK_OBJ[k], &banks[k], sizeof banks[k]) != 0)
+                return -1;
+            bank_dirty &= (uint8_t)~(1u << k);
+        }
+    return 0;
+}
 
 #define SET_MAGIC 0x4D423156u            /* "MB1V": 0.9 ("MB1U": 0.8, "MB1T": 0.3 .. 0.7, "MB1S": 0.1 .. 0.2) */
 typedef struct {
     uint32_t magic;
     int8_t octave;                       /* -2 .. +2 */
-    uint8_t slot;                        /* 0 .. 15 */
+    uint8_t slot;                        /* 0 .. 127: A01 .. D32 */
     uint8_t page;
     uint8_t edited;                      /* the patch differs from its slot */
     patch_t cur;                         /* the patch playing, as it was left */
@@ -698,7 +714,7 @@ static uint8_t params_stale;                 /* changed since the last post (pos
 static void slot_load(uint32_t s)
 {
     set.slot = (uint8_t)(s % NSLOT);
-    set.cur = bank.slot[set.slot];
+    set.cur = SLOT(set.slot);
     set.edited = 0;
     set_dirty = 1;
     params_stale = 1;
@@ -710,7 +726,7 @@ static void settings_defaults(void)
     set.octave = 0;
     set.page = 0;
     set.slot = 0;
-    set.cur = bank.slot[0];
+    set.cur = SLOT(0);
     set.edited = 0;
     for (uint32_t i = 0; i < NG; i++)
         set.g[i] = G_DEF[i];
@@ -718,26 +734,26 @@ static void settings_defaults(void)
 
 static uint8_t arp_posted;                   /* the arpeggiator's state the audio side was told */
 
-static int bank_migrate(void)                /* an older bank (47 or 52 parameters a patch): the rest as INIT */
+static int bank_migrate(void)                /* an older bank A (47 .. 64 parameters a patch): the rest as INIT */
 {
     static const struct { uint32_t magic, np; } OLD[] = {{0x4D423144u, NP_08}, {0x4D423145u, NP_09}, {0x4D423146u, NP_10}, {0x4D423147u, NP_104}};
     uint32_t k, i, j, size = (uint32_t)plat_store_size(OBJ_BANK);
     for (k = 0; k < sizeof OLD / sizeof OLD[0]; k++) {
         uint32_t so = 8u + OLD[k].np;
-        if (size != 4u + NSLOT * so || size > sizeof bank ||
-            plat_store_load(OBJ_BANK, &bank, sizeof bank) != (int)size || bank.magic != OLD[k].magic)
+        if (size != 4u + BANK_N * so || size > sizeof banks[0] ||
+            plat_store_load(OBJ_BANK, &banks[0], sizeof banks[0]) != (int)size || banks[0].magic != OLD[k].magic)
             continue;
-        for (i = NSLOT; i-- > 0u;) {         /* (from the last: each new patch is longer than its old one) */
+        for (i = BANK_N; i-- > 0u;) {         /* (from the last: each new patch is longer than its old one) */
             uint8_t o[8u + NP];
-            const uint8_t *src = (const uint8_t *)bank.slot + i * so;
+            const uint8_t *src = (const uint8_t *)banks[0].slot + i * so;
             for (j = 0; j < so; j++)
                 o[j] = src[j];
             for (j = 0; j < 8u; j++)
-                bank.slot[i].name[j] = (char)o[j];
+                banks[0].slot[i].name[j] = (char)o[j];
             for (j = 0; j < NP; j++)
-                bank.slot[i].v[j] = j < OLD[k].np ? o[8u + j] : INIT_V[j];
+                banks[0].slot[i].v[j] = j < OLD[k].np ? o[8u + j] : INIT_V[j];
         }
-        bank.magic = BANK_MAGIC;
+        banks[0].magic = BANK_MAGIC;
         return 1;
     }
     return 0;
@@ -746,16 +762,19 @@ static int bank_migrate(void)                /* an older bank (47 or 52 paramete
 void app_init(void)
 {
     uint32_t i, j;
-    if ((plat_store_load(OBJ_BANK, &bank, sizeof bank) != (int)sizeof bank || bank.magic != BANK_MAGIC) &&
-        !bank_migrate()) {
-        bank.magic = BANK_MAGIC;
-        for (i = 0; i < NSLOT; i++)
-            patch_factory(&bank.slot[i], i);
+    for (i = 0; i < NBANK; i++) {            /* (bank A may be an older one; B .. D new in 0.12: INIT) */
+        bank_t *b = &banks[i];
+        if ((plat_store_load(BANK_OBJ[i], b, sizeof *b) != (int)sizeof *b || b->magic != BANK_MAGIC) &&
+            !(i == 0u && bank_migrate())) {
+            b->magic = BANK_MAGIC;
+            for (j = 0; j < BANK_N; j++)
+                patch_factory(&b->slot[j], i * BANK_N + j);
+        }
     }
     for (i = 0; i < NSLOT; i++)
         for (j = 0; j < NP; j++)
-            if (bank.slot[i].v[j] > pmax(j))
-                bank.slot[i].v[j] = (uint8_t)pmax(j);
+            if (SLOT(i).v[j] > pmax(j))
+                SLOT(i).v[j] = (uint8_t)pmax(j);
     if (plat_store_load(OBJ_SETTINGS, &set, sizeof set) != (int)sizeof set || set.magic != SET_MAGIC ||
         set.octave < -2 || set.octave > 2 || set.slot >= NSLOT || set.page >= NPAGE)
         settings_defaults();
@@ -793,11 +812,13 @@ void app_init(void)
  *                           76; 0.8's 47, 0.9's 52, 0.10's 63 and 0.10.4's 64 taken, the rest as INIT);
  *                           kept in RAM until 02. The slot playing: played at once
  *   02                      the slots stored in the flash
- *   03                      the factory slots back (stored)
+ *   03                      bank A's factory slots back (stored; banks B .. D stay as they are)
  *   04 SLOT                 a slot played (as PRESET)
- *   05 SLOT                 a slot's patch sent back: F0 7D 4D 42 05 SLOT NAME[8] V[NP] F7 (01's layout); SLOT 7F:
- *                           the sound playing, as it is now (edits not saved included)
- *   06                      what is there: F0 7D 4D 42 06 NP NSLOT SLOT EDITED F7 (the slot playing, 1: edited)
+ *   05 SLOT                 a slot's patch sent back: F0 7D 4D 42 05 SLOT NAME[8] V[NP] F7 (01's layout)
+ *   06                      what is there: F0 7D 4D 42 06 NP NBANK SLOT EDITED F7 (banks of 32; the slot playing,
+ *                           1: edited)
+ *   08                      the sound playing sent back, as it is now (edits not saved included): F0 7D 4D 42 08 SLOT
+ *                           NAME[8] V[NP] F7 (SLOT: the one it came from)
  *   07 NAME[8] V[NP]        a patch played, into no slot (as edited: SAVE keeps it); the editor's
  * A frame's answer: F0 7D 4D 42 7F CMD STATUS F7 (STATUS 0 done, 1 refused) */
 static uint8_t bank_loaded;                  /* slots came in over SysEx since the last store */
@@ -809,7 +830,7 @@ static void sysex_answer(uint32_t cmd, uint32_t st)
 }
 static int bank_store(void)
 {
-    int r = plat_store_save(OBJ_BANK, &bank, sizeof bank);
+    int r = banks_save();
     if (r == 0)
         r = plat_store_save(OBJ_SETTINGS, &set, sizeof set);   /* (the slot playing, too) */
     if (r == 0) {
@@ -826,7 +847,8 @@ int app_sysex(const uint8_t *p, uint32_t n)
         return 0;
     cmd = p[3];
     if (cmd == 1u && (n == 13u + NP || n == 13u + NP_08 || n == 13u + NP_09 || n == 13u + NP_10 || n == 13u + NP_104) && p[4] < NSLOT) {
-        patch_t *d = &bank.slot[p[4]];
+        patch_t *d = &SLOT(p[4]);
+        bank_dirty |= (uint8_t)(1u << (p[4] / BANK_N));
         uint32_t nv = n - 13u;               /* (an older loader's 47 or 52: the rest as INIT) */
         for (i = 0; i < 8u; i++)
             d->name[i] = p[5u + i] >= 32u && p[5u + i] < 127u ? (char)p[5u + i] : ' ';
@@ -841,8 +863,9 @@ int app_sysex(const uint8_t *p, uint32_t n)
         app_say(i ? "STORE" : "PATCHES", i ? "FAILED" : "STORED");
         sysex_answer(cmd, i ? 1u : 0u);
     } else if (cmd == 3u && n == 4u) {
-        for (i = 0; i < NSLOT; i++)
-            patch_factory(&bank.slot[i], i);
+        for (i = 0; i < BANK_N; i++)         /* (bank A, where the factory sounds are: B .. D stay as they are) */
+            patch_factory(&SLOT(i), i);
+        bank_dirty |= 1u;
         i = (uint32_t)bank_store();
         slot_load(set.slot);
         app_say("FACTORY", i ? "FAILED" : "PATCHES");
@@ -850,10 +873,10 @@ int app_sysex(const uint8_t *p, uint32_t n)
     } else if (cmd == 4u && n == 5u && p[4] < NSLOT) {
         slot_load(p[4]);
         sysex_answer(cmd, 0);
-    } else if (cmd == 5u && n == 5u && (p[4] < NSLOT || p[4] == 0x7Fu)) {
-        const patch_t *d = p[4] == 0x7Fu ? &set.cur : &bank.slot[p[4]];
-        uint8_t f[15u + NP] = {0xF0, 0x7D, 0x4D, 0x42, 5};
-        f[5] = p[4];
+    } else if ((cmd == 5u && n == 5u && p[4] < NSLOT) || (cmd == 8u && n == 4u)) {
+        const patch_t *d = cmd == 8u ? &set.cur : &SLOT(p[4]);
+        uint8_t f[15u + NP] = {0xF0, 0x7D, 0x4D, 0x42, (uint8_t)cmd};
+        f[5] = cmd == 8u ? set.slot : p[4];
         for (i = 0; i < 8u; i++)
             f[6u + i] = (uint8_t)d->name[i] & 0x7Fu;
         for (i = 0; i < NP; i++)
@@ -862,7 +885,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
         (void)plat_sysex_send(f, sizeof f);
         return 1;
     } else if (cmd == 6u && n == 4u) {
-        uint8_t f[10] = {0xF0, 0x7D, 0x4D, 0x42, 6, (uint8_t)NP, (uint8_t)NSLOT, set.slot, set.edited ? 1u : 0u, 0xF7};
+        uint8_t f[10] = {0xF0, 0x7D, 0x4D, 0x42, 6, (uint8_t)NP, (uint8_t)NBANK, set.slot, set.edited ? 1u : 0u, 0xF7};
         (void)plat_sysex_send(f, sizeof f);
         return 1;
     } else if (cmd == 7u && n == 12u + NP) {
@@ -903,8 +926,9 @@ static void value_text(uint32_t i, uint32_t x, char *b) { mb_value_text(i, x, se
 static void name_text(const patch_t *p, char *b)   /* the slot and the name: "03 ACID*" */
 {
     uint32_t i, n = 0;
-    b[n++] = (char)('0' + (set.slot + 1u) / 10u);
-    b[n++] = (char)('0' + (set.slot + 1u) % 10u);
+    b[n++] = (char)('A' + set.slot / BANK_N);      /* A01 .. D32 */
+    b[n++] = (char)('0' + (set.slot % BANK_N + 1u) / 10u);
+    b[n++] = (char)('0' + (set.slot % BANK_N + 1u) % 10u);
     b[n++] = ' ';
     for (i = 0; i < 8u && p->name[i] != ' '; i++)
         b[n++] = p->name[i];
@@ -1005,9 +1029,10 @@ static void page_button(uint32_t b)          /* its page; pressed again, its oth
 static void save(void)
 {
     char t[16];
-    bank.slot[set.slot] = set.cur;
+    SLOT(set.slot) = set.cur;
+    bank_dirty |= (uint8_t)(1u << (set.slot / BANK_N));
     set.edited = 0;
-    if (plat_store_save(OBJ_BANK, &bank, sizeof bank) == 0 && plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 &&
+    if (banks_save() == 0 && plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 &&
         (!sq_dirty || plat_store_save(OBJ_SEQ, &sq, sizeof sq) == 0)) {
         set_dirty = 0;
         sq_dirty = 0;
