@@ -70,7 +70,8 @@ typedef struct {
     /* filter (2x oversampled Chamberlin SVF) */
     float lp, bp, hp, brute_fb, tri_lp, sub_lp, ring_pk;
     float dec_hist[64]; int dec_pos; float agc_env;
-    float vca_fb, fb_x1, fb_y1, in_x1, in_y1, out_x1, out_y1;  /* (and its DC blocker's state) */                /* Brute Factor: the VCA's output, back into the mixer (oversampled) */
+    float vca_fb, fb_x1, fb_y1, in_x1, in_y1, out_x1, out_y1;
+    int   ctl_cnt, c_ringout; float c_g, c_rgain;   /* the filter's coefficients, updated every few samples */  /* (and its DC blocker's state) */                /* Brute Factor: the VCA's output, back into the mixer (oversampled) */
     float x_prev;
 } MBVoice;
 

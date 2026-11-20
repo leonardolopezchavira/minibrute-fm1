@@ -7,6 +7,7 @@
 #define PI 3.14159265358979f
 #define OS 4                          /* filter oversampling */
 #define DEC_TAPS 64                   /* decimation FIR length (at the oversampled rate) */
+#define CTRL 4                        /* the filter's coefficients: every CTRL samples (a power of 2) */
 
 #include "mbcal.h"
 #ifdef MB_MEASURED_METAL
@@ -303,7 +304,30 @@ void mb_render(MBVoice *v, float *out, int n) {
     const float bass_a = C.bass_k * mb_powf(clampf(p->resonance, 0.f, 1.f), C.bass_exp);
     const float fa = env_att(p->f_a, sr), fd = env_fac(p->f_d, sr), fr = env_fac(p->f_r, sr);
     const float aa = env_att(p->a_a, sr), ad = env_fac(p->a_d, sr), ar = env_fac(p->a_r, sr);
+    /* what the resonance alone sets: once a block */
+    const float ringw = clampf((res - 0.9f) * 10.f, 0.f, 1.f);
+    const float agw = clampf((res - C.agc_start) / mb_fmaxf(0.9f - C.agc_start, 0.01f), 0.f, 1.f) * (1.f - ringw);
+    const float limw = clampf((res - C.lim_start) / mb_fmaxf(0.9f - C.lim_start, 0.01f), 0.f, 1.f) * (1.f - ringw);
+    const float lim_mk = limw > 0.f ? mb_powf(C.lim_makeup, mb_powf(limw, C.lim_makeup_exp)) : 1.f;
+    const float shw = clampf((res - C.shaper_res_start) / mb_fmaxf(1.f - C.shaper_res_start, 0.01f), 0.f, 1.f);
+    const float sub_k = 1.f - mb_expf(-2.f * PI * C.sub_sine_fc * isr);
     int i, o;
+
+    if (!v->gate && v->ast == 0) {           /* silent (no note, the amp envelope done): nothing to compute */
+        for (i = 0; i < n; i++) {
+            v->fenv = env_step(v->fenv, &v->fst, fa, fd, p->f_s, fr);
+            out[i] = 0.f;
+        }
+        (void)lfo_value(v, isr * (float)n);   /* the free-running LFOs go on */
+        v->vib_ph = frac(v->vib_ph + p->vib_rate_hz * isr * (float)n);
+        v->us_lfo = frac(v->us_lfo + C.us_rate_mult * p->ultrasaw_rate_hz * isr * (float)n);
+        v->us_ph1 = frac(v->us_ph1 + C.us_fixed_hz * isr * (float)n);
+        if (v->pitch_st < v->target_st) v->pitch_st = mb_fminf(v->pitch_st + glide_rate * (float)n, v->target_st);
+        else if (v->pitch_st > v->target_st) v->pitch_st = mb_fmaxf(v->pitch_st - glide_rate * (float)n, v->target_st);
+        v->out_x1 = v->out_y1 = 0.f;
+        v->ctl_cnt = 0;
+        return;
+    }
 
     for (i = 0; i < n; i++) {
         /* --- modulation sources --- */
@@ -360,34 +384,34 @@ void mb_render(MBVoice *v, float *out, int n) {
             s += g_tri * metal_wave(v->ph, m, f0, sr);
         }
         if (g_sub > 0.f) {
-            float sub = p->sub_sine ? (v->sub_lp += (1.f - mb_expf(-2.f * PI * C.sub_sine_fc * isr)) * (tri_skewed(v->sub_ph, 0.f) - v->sub_lp))
+            float sub = p->sub_sine ? (v->sub_lp += sub_k * (tri_skewed(v->sub_ph, 0.f) - v->sub_lp))
                                     : (v->sub_ph < 0.5f ? 1.f : -1.f) + poly_blep(v->sub_ph, dt * subdiv) - poly_blep(frac(v->sub_ph + 0.5f), dt * subdiv);
             s += g_sub * sub;
         }
         if (g_noise > 0.f) s += g_noise * noise(&v->rng);
 
-        /* --- filter cutoff in "knob octaves" --- */
-        float oct = p->keytrack * ((float)v->note - C.kt_ref) / 12.f
-                  + C.fenv_oct * p->fenv_amt * v->fenv * fvel
-                  + C.lfo_filter_oct * p->lfo_filter * lfo
-                  + C.at_cut_oct * p->at_cut * v->aftertouch;
-        if (p->wheel_dest == MB_WHEEL_CUTOFF) oct += C.wheel_cut_oct * ws * (1.f - C.wheel_cut_curve * ws);
-        float knob_eff = clampf(p->cutoff_hz * mb_exp2f(oct), 10.f, 40000.f);
-        float ringw = clampf((res - 0.9f) * 10.f, 0.f, 1.f);
-        float corr = ringw > 0.f ? 1.f + ringw * (ring_tab(C.ring_fcorr, knob_eff) - 1.f)
-                                 : knob_corr(knob_eff);
-        float fc = clampf(filter_freq(knob_eff, res) * corr, 10.f, 0.45f * sr * OS);
-        float rgain = 1.f + ringw * (ring_tab(C.ring_gain, knob_eff) - 1.f);
-        float g = mb_tanf(PI * fc / (sr * OS));
+        /* --- filter cutoff in "knob octaves": the coefficients every CTRL samples (the expensive maths) --- */
+        if (v->ctl_cnt == 0) {
+            float oct = p->keytrack * ((float)v->note - C.kt_ref) / 12.f
+                      + C.fenv_oct * p->fenv_amt * v->fenv * fvel
+                      + C.lfo_filter_oct * p->lfo_filter * lfo
+                      + C.at_cut_oct * p->at_cut * v->aftertouch;
+            if (p->wheel_dest == MB_WHEEL_CUTOFF) oct += C.wheel_cut_oct * ws * (1.f - C.wheel_cut_curve * ws);
+            float knob_eff = clampf(p->cutoff_hz * mb_exp2f(oct), 10.f, 40000.f);
+            float corr = ringw > 0.f ? 1.f + ringw * (ring_tab(C.ring_fcorr, knob_eff) - 1.f)
+                                     : knob_corr(knob_eff);
+            float fc = clampf(filter_freq(knob_eff, res) * corr, 10.f, 0.45f * sr * OS);
+            v->c_rgain = 1.f + ringw * (ring_tab(C.ring_gain, knob_eff) - 1.f);
+            v->c_g = mb_tanf(PI * fc / (sr * OS));
+            v->c_ringout = knob_eff < C.ring_lo || knob_eff > C.ring_hi;
+        }
+        v->ctl_cnt = (v->ctl_cnt + 1) & (CTRL - 1);
+        const float g = v->c_g, rgain = v->c_rgain;
         float kd = k_damp;
-        float agw = clampf((res - C.agc_start) / mb_fmaxf(0.9f - C.agc_start, 0.01f), 0.f, 1.f) * (1.f - ringw);
         if (agw > 0.f) kd += agw * C.agc_k * mb_fmaxf(v->agc_env - C.agc_level, 0.f);   /* loud resonance damps itself */
-        if (kd < 0.05f && (knob_eff < C.ring_lo || knob_eff > C.ring_hi)) kd = 0.05f;   /* plugin stops ringing outside this range */
+        if (kd < 0.05f && v->c_ringout) kd = 0.05f;   /* plugin stops ringing outside this range */
         float a1 = 1.f / (1.f + g * (g + kd)), a2 = g * a1, a3 = g * a2;
 
-        float limw = clampf((res - C.lim_start) / mb_fmaxf(0.9f - C.lim_start, 0.01f), 0.f, 1.f) * (1.f - ringw);
-        float lim_mk = limw > 0.f ? mb_powf(C.lim_makeup, mb_powf(limw, C.lim_makeup_exp)) : 1.f;
-        float shw = clampf((res - C.shaper_res_start) / mb_fmaxf(1.f - C.shaper_res_start, 0.01f), 0.f, 1.f);
         /* --- VCA gain (before the filter: the Brute Factor takes the VCA's output back to the mixer) --- */
         float la = p->lfo_amp >= 0.f ? lfo_a : -lfo_a;
         float amp = v->aenv * avel * clampf(1.f + mb_fabsf(p->lfo_amp) * (la - 1.f), 0.f, 1.f);
