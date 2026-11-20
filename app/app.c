@@ -1330,6 +1330,72 @@ static void bar(int32_t x, int32_t y, int32_t w, uint32_t v, uint32_t max, int b
     }
 }
 
+/* a parameter drawn as the editor draws it (app/editor/index.html): a knob, a fader (the mixer's levels, the
+ * envelopes) or a slide switch (the two- and three-way choices); the knobs' choices click round as rotary switches */
+enum { K_KNOB, K_FADER, K_SWITCH };
+static uint32_t ctl_kind(uint32_t p)
+{
+    switch (p) {
+    case P_SUB: case P_SAW: case P_SQR: case P_TRI: case P_NOISE:
+    case P_FA: case P_FD: case P_FS: case P_FR: case P_AA: case P_AD: case P_AS: case P_AR:
+        return K_FADER;
+    case P_SUBSHP: case P_SUBOCT: case P_WDEST: case P_PLAY: case P_VTYPE: case P_LRTRG: case P_ARP:
+    case P_DSYNC: case P_DMODE: case P_FXORD: case G_HORD: case G_LSYNC:
+        return K_SWITCH;
+    default:
+        return K_KNOB;
+    }
+}
+static void disk(int32_t cx, int32_t cy, int32_t r, uint16_t c)
+{
+    int32_t dy;
+    for (dy = -r; dy <= r; dy++) {
+        int32_t w = (int32_t)(fm_sqrtf((float)(r * r - dy * dy)) + 0.5f);
+        cv_rect(cx - w, cy + dy, 2 * w + 1, 1, c);
+    }
+}
+static void ray(int32_t cx, int32_t cy, float deg, float r0, float r1, uint16_t c)   /* 0 deg: up, clockwise */
+{
+    float a = deg * 0.017453293f, sx = fm_sinf(a), sy = -fm_cosf(a);
+    cv_line(cx + (int32_t)(sx * r0 + (sx < 0 ? -0.5f : 0.5f)), cy + (int32_t)(sy * r0 + (sy < 0 ? -0.5f : 0.5f)),
+            cx + (int32_t)(sx * r1 + (sx < 0 ? -0.5f : 0.5f)), cy + (int32_t)(sy * r1 + (sy < 0 ? -0.5f : 0.5f)), c);
+}
+static void ctl_draw(uint32_t p, uint32_t v, int32_t cx, int32_t cy, int lit)
+{
+    uint32_t max = pmax(p), kind = ctl_kind(p), k;
+    uint16_t hand = lit ? C_WHITE : C_ACCENT;
+    if (kind == K_FADER) {                   /* a slot, a cap at the level, ticks beside */
+        int32_t top = cy - 19, h = 38, at = top + h - (int32_t)(v * (uint32_t)h / (max ? max : 1u));
+        for (k = 0; k <= 4u; k++)
+            cv_rect(cx + 8, top + (int32_t)k * h / 4, 4, 1, C_GRAY);
+        cv_rect(cx - 2, top, 4, h + 1, C_LINE);
+        cv_rect(cx - 7, at - 2, 14, 5, hand);
+    } else if (kind == K_SWITCH) {           /* a rounded slot, the dot at its position (the first at the top) */
+        uint32_t n = max + 1u;
+        int32_t gap = 11, h = gap * (int32_t)(n - 1u) + 12, top = cy - h / 2;
+        cv_rect(cx - 5, top + 2, 10, h - 4, C_LINE);
+        cv_rect(cx - 4, top + 1, 8, h - 2, C_LINE);
+        for (k = 0; k < n; k++)
+            cv_rect(cx + 8, top + 5 + (int32_t)k * gap, 3, 1, k == v ? C_GRAY : C_DIM);
+        disk(cx, top + 6 + (int32_t)(v < n ? v : 0u) * gap, 4, hand);
+    } else {                                 /* a knob: its ticks (a choice's positions), the cap, the pointer */
+        int en = is_enum(pinfo(p)->type), bip = pinfo(p)->type == T_BIP;
+        uint32_t n = en ? max + 1u : 11u;
+        float step = en ? (270.0f / (float)(n - 1u) < 45.0f ? 270.0f / (float)(n - 1u) : 45.0f) : 27.0f;
+        float a0 = -step * (float)(n - 1u) * 0.5f;
+        for (k = 0; k < n; k++)
+            ray(cx, cy, a0 + step * (float)k, 13.0f, (bip && k == 5u) || k == 0u || k + 1u == n ? 18.0f : 16.0f,
+                en && k == v ? C_WHITE : C_GRAY);
+        disk(cx, cy, 11, C_DIM);
+        {   /* the pointer: three strokes wide */
+            float a = en ? a0 + step * (float)(v < n ? v : 0u) : -135.0f + 270.0f * (float)v / (float)(max ? max : 1u);
+            ray(cx, cy, a, 0.0f, 10.0f, hand);
+            ray(cx + 1, cy, a, 0.0f, 10.0f, hand);
+            ray(cx, cy + 1, a, 0.0f, 10.0f, hand);
+        }
+    }
+}
+
 static uint32_t cpu_peak;
 
 static void draw(void)
@@ -1384,11 +1450,16 @@ static void draw(void)
         v = pget(p);
         k[1] = (char)('1' + i);
         cv_rect(x, y, 114, 54, lit ? C_LINE : C_BLACK);
-        cv_text(x + 4, y + 3, &FONT_XS, k, C_DIM);
-        cv_text(x + 24, y + 3, &FONT_XS, pinfo(p)->name, C_GRAY);
+        if (lit)                             /* (the control's own ground, so its slot shows) */
+            cv_rect(x + 2, y + 13, 38, 40, C_BLACK);
+        cv_text(x + 3, y + 1, &FONT_XS, k, C_DIM);
+        ctl_draw(p, v, x + 21, y + 33, lit);
+        cv_text(x + 44, y + 3, &FONT_XS, pinfo(p)->name, C_GRAY);
         value_text(p, v, t);
-        cv_text(x + 4, y + 18, &FONT_B, t, lit ? C_WHITE : C_HI);
-        bar(x + 4, y + 44, 106, v, pmax(p), pinfo(p)->type == T_BIP, C_ACCENT);
+        {   /* the value: as large as fits beside the control */
+            const felucca_font_t *f = text_w(&FONT_B, t) <= 68 ? &FONT_B : text_w(&FONT_S, t) <= 68 ? &FONT_S : &FONT_XS;
+            cv_text(x + 44, y + 24, f, t, lit ? C_WHITE : C_HI);
+        }
     }
     cv_blit(0, 36);
     /* the foot: the wheel, the pressure, the octave, and the scope */

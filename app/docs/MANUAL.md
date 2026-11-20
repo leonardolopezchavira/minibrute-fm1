@@ -8,7 +8,7 @@ another, let it go, and the first comes back (with glide, if GLIDE is up).
 ## The screen
 
 At the top: the patch slot and its name (a `*` when it has changed since it was saved) and the note playing. In the
-middle: the page, and its four parameters, one for each of K1..K4, with their values and bars. At the bottom: the mod
+middle: the page, and its four parameters, one for each of K1..K4, each drawn as on the patch editor's sheet (a knob, a fader for the mixer and the envelopes, a slide switch for the two- and three-way choices) with its value. At the bottom: the mod
 wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PEAK: the most since power-on, in % of the time the FM-1 has for each block of sound; XRUN: blocks it missed, heard as clicks), and the sound as a scope.
 
 ## The controls
