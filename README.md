@@ -28,10 +28,19 @@ Every push to `main` builds the firmware on GitHub Actions (zvenson/fm1-build) a
 
 ## About the measurements
 
-The engine's calibration (`app/mbvoice/mbcal.h`) was fitted to renders of the MiniBrute V plugin. The Metalizer is
-modelled from the circuit: one folding stage computed from its transistors and resistors (`app/mbvoice/metal_stage.h`),
-four in a row, its gain and offset fitted to the plugin. The measured single cycles used during development are not
-published (`MB_MEASURED_METAL`, private builds only).
+The engine's calibration (`app/mbvoice/mbcal.h`) was fitted to renders of the MiniBrute V plugin, and its
+structure follows the Minibrute's circuit where that made it closer:
+
+- **Brute Factor** takes the VCA's output back into the oscillator mixer, through the VCA's saturation and a coupling
+  capacitor.
+- **Ultrasaw** adds two copies of the saw, each with a pulse where the saw crosses a slow triangle LFO (one fixed, one
+  the RATE knob).
+- **Metalizer**: one folding stage computed from its transistors and resistors (`app/mbvoice/metal_stage.h`), four in
+  a row, the folded path a little behind the clean triangle; gain, offset and lag fitted to the plugin.
+- **Filter modes**: BP, HP and Notch as mixes of the low-, band- and high-pass responses, as the Steiner-Parker
+  network gives them when the signal goes into its different inputs.
+
+The measured Metalizer cycles used during development are not published (`MB_MEASURED_METAL`, private builds only).
 
 ## Licence
 

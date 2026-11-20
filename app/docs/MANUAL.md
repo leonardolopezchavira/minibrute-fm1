@@ -43,9 +43,14 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 
 Notes on a few of them:
 
-- **ULTRASAW** (OSC 2) mixes a phase-shifted copy into the sawtooth; **US RATE** (MORE) is its speed.
-- **METAL** (OSC 2) folds the triangle; **MTL ENV** and **PWM/MTL** move it with the filter envelope and the LFO.
-- **BRUTE** (FILTER) feeds the filter's output back into its input: growl, then chaos.
+- **ULTRASAW** (OSC 2) adds two shifting copies of the sawtooth, as the hardware does: one moved by a slow LFO of its
+  own, one by **US RATE** (MORE).
+- **METAL** (OSC 2) folds the triangle through four folding stages (low settings fold only its top); **MTL ENV** and
+  **PWM/MTL** move it with the filter envelope and the LFO.
+- **BRUTE** (FILTER) feeds the sound after the VCA back into the oscillator mixer, as the hardware does: growl, then,
+  near full, chaos (a low growl a third of the note's pitch). It follows the amp envelope.
+- **MODE** (FILTER 2): LP, BP, HP and NOTCH as the Minibrute's Steiner-Parker filter makes them: HP keeps some low
+  end, the notch is shallow.
 - **WHEEL TO** (PERFORM) is the Minibrute's mod wheel destination: LFO AMT, VIBRATO or CUTOFF; **WHL AMT** how far.
 - **VINTAGE** (PERFORM) detunes each note a little, the way an old oscillator drifts.
 - **PLAY** (VOICE): LEGATO, a note played while another is held keeps the envelopes going (and glides); RETRIG, every
