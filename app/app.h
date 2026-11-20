@@ -6,6 +6,8 @@
 
 #define APP_NAME "MB-1"
 #define APP_SPLASH_RGB RGB(240, 96, 40)
+#define APP_SPLASH                       /* the start-up screen: app/splash (app.c app_splash) */
+void app_splash(void);
 #define APP_BLOCK 256u                   /* frames per audio block: 5.8 ms at 44.1 kHz */
 #define APP_TOUCH                        /* velocity and pressure from the keys (lib/touch.h) */
 #define APP_SYSEX                        /* patches over USB SysEx (app.c: the loader) */

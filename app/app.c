@@ -1504,6 +1504,28 @@ static void draw(void)
     cv_blit(0, 172);
 }
 
+#include "splash_img.h"
+void app_splash(void)                        /* the start-up screen (app/splash, tools/make_splash.py), band by band */
+{
+    uint32_t k = 0, left = 0, c = 0, y;
+    for (y = 0; y < 240u; y += 16u) {
+        uint32_t x, yy;
+        cv_begin(240, 16, 0);
+        for (yy = 0; yy < 16u; yy++)
+            for (x = 0; x < 240u; x++) {
+                if (!left && k < SPLASH_N) {
+                    c = SPLASH_PAL[SPLASH_RLE[k] >> 4];
+                    left = (SPLASH_RLE[k] & 15u) + 1u;
+                    k++;
+                }
+                if (left)
+                    left--;
+                cv_pset((int32_t)x, (int32_t)yy, (uint16_t)c);
+            }
+        cv_blit(0, y);
+    }
+}
+
 void app_ui_init(void)
 {
     /* the site's dark look (tools/site_theme.py, the patch editor's dark sheet): black, the panel's grey, white
