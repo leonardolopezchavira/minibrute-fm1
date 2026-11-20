@@ -16,7 +16,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | Control | What it does |
 | --- | --- |
 | K1..K4 | The four parameters on screen. A fast turn moves in bigger steps. |
-| HOME, SEL, ENV, LFO, EDIT, GLO, FX | A page; pressed again, its second page (the button of the page on screen is lit) |
+| HOME, SEL, ENV, LFO, EDIT, GLO, FX | A page; pressed again, its next page (FX: TOUCH, DELAY, REVERB, FX 2; the button of the page on screen is lit) |
 | SELECT | Steps through every page |
 | ALGO | The mod wheel (sent as MIDI CC 1 too). Where it goes: PERFORM, WHEEL TO |
 | PRESET | The patch slot, 1..32. Turning it loads the slot (unsaved changes are dropped) |
@@ -44,6 +44,9 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | MORE | GLO | SUB OCT | SUB WAVE | US RATE | LEVEL |
 | VOICE | GLO | PLAY | BEND | LFO RTRG |  |
 | TOUCH | FX | AT VIB | AT CUT | PW ENV | MTL ENV |
+| DELAY | FX | TIME | FEEDBACK | TONE | MIX |
+| REVERB | FX | DECAY | SIZE | DAMP | MIX |
+| FX 2 | FX | DLY SYNC | DLY MODE | PRE-DLY |  |
 | ARP | ARP | MODE | OCTAVE | STEP | SWING |
 | ARP 2 | ARP (held) | TEMPO | ARP | HOLD ORD | LFO CLK |
 | SEQ | SEQ | PATTERN | LENGTH | STEP | SWING |
@@ -85,6 +88,22 @@ After the Minibrute's. ARP steps through OFF, ON and HOLD:
 Each note sounds for half its step. As in the plugin, the arpeggiator is the patch's: ARP (OFF, ON or HOLD), MODE,
 OCTAVE, STEP and SWING are saved with it, so picking a patch can switch the arpeggiator on. TEMPO, HOLD ORD and
 LFO CLK belong to the instrument (one tempo for every patch).
+
+## The effects
+
+A delay and then a reverb, after the plugin's (its usual order); saved with each patch. They are stereo: the
+voice in the middle, the repeats and the reverb around it. With MIX at 0 an effect is off.
+
+- **DELAY**: **TIME** 2 ms to 1.5 s (0.74 s in PING-PONG), on the plugin's scale; with **DLY SYNC** CLOCK (FX 2) it
+  picks a note value instead (1/32 .. 1/1, triplets and dotted too) on the arpeggiator's and sequencer's tempo.
+  **FEEDBACK** the repeats; **TONE** a low-pass on them (each repeat darker); **MIX** dry to wet. **DLY MODE** (FX 2):
+  STEREO (the repeats in the middle) or PING-PONG (left, right, left...). Turning TIME glides, as tape does.
+- **REVERB**: a plate. **DECAY** how long it rings, **SIZE** the room, **DAMP** how quickly its highs die away, **MIX**
+  dry to wet; **PRE-DLY** (FX 2) a gap before it, 0 to 200 ms.
+
+They run on the FM-1's second core while the first plays the voice (the screen's foot shows **2C**). On a unit whose
+second core is unreliable (some are), MB-1 notices, gives it up until power-off, and runs them on the first (**1C**):
+the same sound, with less headroom. Only the effects are a block (6 ms) behind the voice; the dry sound is not.
 
 ## The sequencer
 
@@ -178,6 +197,17 @@ sent out over USB and Bluetooth.
 | 107 | OCTAVE | ARP |
 | 108 | STEP | ARP |
 | 109 | SWING | ARP |
+| 110 | TIME | DELAY |
+| 111 | FEEDBACK | DELAY |
+| 112 | TONE | DELAY |
+| 113 | MIX | DELAY |
+| 114 | DLY SYNC | FX 2 |
+| 115 | DLY MODE | FX 2 |
+| 116 | DECAY | REVERB |
+| 117 | SIZE | REVERB |
+| 118 | DAMP | REVERB |
+| 119 | MIX | REVERB |
+| 14 | PRE-DLY | FX 2 |
 | 97 | AT VIB | TOUCH |
 | 98 | AT CUT | TOUCH |
 | 99 | PW ENV | TOUCH |

@@ -14,19 +14,22 @@
  * scope. The engine is compiled apart at -O2 (fm1.toml o2). */
 #include "fastmath.h"
 #include "mbvoice.h"
+#include "mbfx.h"
 #include "mb_tapers.h"
 
 #define C_ACCENT RGB(240, 96, 40)       /* the highlight: Minibrute orange */
 
 
 /* ------------------------------------------------------------- parameters --- */
-enum { T_LVL, T_BIP, T_KBD, T_CUT, T_ATT, T_DR, T_LFO, T_PW, T_USR, T_VIB, T_GLIDE, T_DB, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
+enum { T_LVL, T_BIP, T_KBD, T_CUT, T_ATT, T_DR, T_LFO, T_PW, T_USR, T_VIB, T_GLIDE, T_DB,
+       T_DTIME, T_DTONE, T_RDEC, T_RSIZE, T_RPRE, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
        T_SUBOCT, T_SUBSHP, T_PLAY, T_BEND, T_ONOFF, T_ARP, T_AMODE, T_AOCT, T_ASTEP, T_ASWING, T_HORD,
-       T_LSYNC, T_TEMPO, T_SPAT, T_SLEN };
+       T_LSYNC, T_TEMPO, T_SPAT, T_SLEN, T_DSYNC, T_DMODE };
 static const uint8_t ENUM_N[] = {[T_MODE] = 4, [T_LWAVE] = 6, [T_VTYPE] = 3, [T_WDEST] = 3, [T_SUBOCT] = 2,
                                  [T_SUBSHP] = 2, [T_PLAY] = 2, [T_BEND] = 12, [T_ONOFF] = 2,
                                  [T_ARP] = 3, [T_AMODE] = 4, [T_AOCT] = 4, [T_ASTEP] = 6, [T_ASWING] = 6, [T_HORD] = 2,
-                                 [T_LSYNC] = 2, [T_TEMPO] = 231, [T_SPAT] = 8, [T_SLEN] = 64};
+                                 [T_LSYNC] = 2, [T_TEMPO] = 231, [T_SPAT] = 8, [T_SLEN] = 64,
+                                 [T_DSYNC] = 2, [T_DMODE] = 2};
 static const char *const MODE_NAME[] = {"LP", "BP", "HP", "NOTCH"};
 static const char *const LWAVE_NAME[] = {"SINE", "TRI", "SAW", "SQUARE", "S&H", "SMOOTH"};
 static const char *const VTYPE_NAME[] = {"-SQR", "SINE", "+SQR"};
@@ -41,6 +44,8 @@ static const char *const AOCT_NAME[] = {"1 OCT", "2 OCT", "3 OCT", "4 OCT"};
 static const char *const ASTEP_NAME[] = {"1/4", "1/8", "1/16", "1/4T", "1/8T", "1/16T"};
 static const char *const HORD_NAME[] = {"PITCH", "PLAYED"};
 static const char *const LSYNC_NAME[] = {"FREE", "ARP"};
+static const char *const DSYNC_NAME[] = {"FREE", "CLOCK"};
+static const char *const DMODE_NAME[] = {"STEREO", "PING-PONG"};
 
 enum { P_CUT, P_RES, P_BRUTE, P_FENV, P_MODE, P_KBD, P_FVEL, P_AVEL,
        P_SAW, P_SQR, P_TRI, P_SUB, P_NOISE, P_ULTRA, P_PW, P_METAL,
@@ -48,8 +53,10 @@ enum { P_CUT, P_RES, P_BRUTE, P_FENV, P_MODE, P_KBD, P_FVEL, P_AVEL,
        P_LRATE, P_LWAVE, P_LPITCH, P_LFILT, P_LPWM, P_LAMP, P_VRATE, P_VTYPE,
        P_GLIDE, P_VINT, P_WDEST, P_WAMT, P_SUBOCT, P_SUBSHP, P_USRATE, P_LEVEL,
        P_ATVIB, P_ATCUT, P_PWENV, P_MTENV, P_PLAY, P_BEND, P_LRTRG,
-       P_ARP, P_AMODE, P_AOCT, P_ASTEP, P_ASWING, NP };
-#define NP_OLD 47u                       /* 0.8's patches: no arpeggiator (the loader takes them still) */
+       P_ARP, P_AMODE, P_AOCT, P_ASTEP, P_ASWING,
+       P_DTIME, P_DFB, P_DTONE, P_DMIX, P_DSYNC, P_DMODE, P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX, P_RPRE, NP };
+#define NP_08 47u                        /* 0.8's patches: no arpeggiator, no effects (the loader takes them still) */
+#define NP_09 52u                        /* 0.8.2 .. 0.9's: no effects */
 #define P_NONE 0xFFu                     /* an empty place on a page */
 /* the instrument's settings (not a patch's): the tempo, the Hold order, the LFO's clock, and the sequencer's
  * pattern, length, step and swing; numbered after the patch's parameters. (The arpeggiator's Off/On/Hold, Mode,
@@ -83,6 +90,10 @@ static const param_t PARAM[NP] = {
     [P_PLAY] = {"PLAY", T_PLAY, 102},   [P_BEND] = {"BEND", T_BEND, 103},  [P_LRTRG] = {"LFO RTRG", T_ONOFF, 104},
     [P_ARP] = {"ARP", T_ARP, 105},      [P_AMODE] = {"MODE", T_AMODE, 106}, [P_AOCT] = {"OCTAVE", T_AOCT, 107},
     [P_ASTEP] = {"STEP", T_ASTEP, 108}, [P_ASWING] = {"SWING", T_ASWING, 109},
+    [P_DTIME] = {"TIME", T_DTIME, 110},   [P_DFB] = {"FEEDBACK", T_LVL, 111}, [P_DTONE] = {"TONE", T_DTONE, 112},
+    [P_DMIX] = {"MIX", T_LVL, 113},       [P_DSYNC] = {"DLY SYNC", T_DSYNC, 114}, [P_DMODE] = {"DLY MODE", T_DMODE, 115},
+    [P_RDECAY] = {"DECAY", T_RDEC, 116},  [P_RSIZE] = {"SIZE", T_RSIZE, 117}, [P_RDAMP] = {"DAMP", T_LVL, 118},
+    [P_RMIX] = {"MIX", T_LVL, 119},       [P_RPRE] = {"PRE-DLY", T_RPRE, 14},
 };
 
 static const param_t GPARAM[NG] = {
@@ -112,6 +123,8 @@ static const page_t PAGE[] = {
     {"PERFORM", B_EDIT, {P_GLIDE, P_VINT, P_WDEST, P_WAMT}}, {"MORE", B_GLO, {P_SUBOCT, P_SUBSHP, P_USRATE, P_LEVEL}},
     {"VOICE", B_GLO, {P_PLAY, P_BEND, P_LRTRG, P_NONE}},
     {"TOUCH", B_FX, {P_ATVIB, P_ATCUT, P_PWENV, P_MTENV}},
+    {"DELAY", B_FX, {P_DTIME, P_DFB, P_DTONE, P_DMIX}},      {"REVERB", B_FX, {P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX}},
+    {"FX 2", B_FX, {P_DSYNC, P_DMODE, P_RPRE, P_NONE}},
     {"ARP", B_ARP, {P_AMODE, P_AOCT, P_ASTEP, P_ASWING}},   {"ARP 2", B_ARP, {G_TEMPO, P_ARP, G_HORD, G_LSYNC}},
     {"SEQ", B_SEQ, {G_SPAT, G_SLEN, G_SSTEP, G_SSWING}},
 };
@@ -132,7 +145,8 @@ static const uint8_t INIT_V[NP] = {
     [P_LAMP] = 64, [P_VRATE] = 57, [P_VTYPE] = 1, [P_GLIDE] = 0, [P_VINT] = 0, [P_WDEST] = 1, [P_WAMT] = 61,
     [P_SUBOCT] = 0, [P_SUBSHP] = 0, [P_USRATE] = 31, [P_LEVEL] = 60, [P_PWENV] = 64, [P_MTENV] = 64,
     [P_PLAY] = 0, [P_BEND] = 1, [P_LRTRG] = 0, [P_ARP] = 0, [P_AMODE] = 0, [P_AOCT] = 0, [P_ASTEP] = 1,
-    [P_ASWING] = 0,
+    [P_ASWING] = 0, [P_DTIME] = 77, [P_DFB] = 51, [P_DTONE] = 95, [P_DMIX] = 0, [P_DSYNC] = 0, [P_DMODE] = 0,
+    [P_RDECAY] = 64, [P_RSIZE] = 64, [P_RDAMP] = 64, [P_RMIX] = 0, [P_RPRE] = 0,
 };
 /* the factory sounds: changes from INIT (parameter, value; 0xFF ends) */
 static const struct {
@@ -176,9 +190,8 @@ static void patch_factory(patch_t *p, uint32_t slot)
         p->v[FACTORY[slot].d[i]] = FACTORY[slot].d[i + 1u];
 }
 
-#define BANK_MAGIC 0x4D423145u           /* "MB1E": 52 parameters, the arpeggiator's too ("MB1D": 0.3 .. 0.8's 47,
-                                         * "MB1C": 0.2's 44, "MB1B": 0.1's 16 slots) */
-#define BANK_MAGIC_OLD 0x4D423144u
+#define BANK_MAGIC 0x4D423146u           /* "MB1F": 63 parameters, the effects' too ("MB1E": 0.8.2 .. 0.9's 52,
+                                         * "MB1D": 0.3 .. 0.8's 47, "MB1C": 0.2's 44, "MB1B": 0.1's 16 slots) */
 typedef struct {
     uint32_t magic;
     patch_t slot[NSLOT];
@@ -245,6 +258,18 @@ static float usr_hz(uint32_t x) { return taper(TP_USR, x); }        /* 0.005 .. 
 static float vib_hz(uint32_t x) { return taper(TP_VIB, x); }        /* 1 .. 50 Hz */
 static float glide_s(uint32_t x) { return taper(TP_GLIDE, x); }     /* 0 .. 2 s an octave */
 static float level_db(uint32_t x) { return taper(TP_DB, x); }       /* -60 .. 0 dB, the plugin's master */
+static float dtime_s(uint32_t x) { return taper(TP_DTIME, x) * 0.001f; }   /* 2 ms .. 2 s (MB-1: up to 1.48 s) */
+static float dlp_hz(uint32_t x) { return taper(TP_DLP, x); }        /* 250 Hz .. 20 kHz */
+static float rpre_s(uint32_t x) { return taper(TP_RPRE, x); }       /* 0 .. 0.2 s */
+static float rdecay(uint32_t x) { return lvl(x) * 0.925f; }         /* the plugin's DECAY, 0 .. 0.925 */
+static float rsize(uint32_t x) { return 0.1f + 1.4f * lvl(x); }     /* the plugin's SIZE, 0.1 .. 1.5 */
+/* the delay on the clock (DLY SYNC: CLOCK): TIME picks a note value; its length in beats */
+#define NDSYNC 14u
+static const char *const DSYNC_DIV[NDSYNC] = {"1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D",
+                                             "1/4", "1/2T", "1/4D", "1/2", "1/2D", "1/1"};
+static const float DSYNC_BEATS[NDSYNC] = {0.125f, 1.0f / 6.0f, 0.25f, 1.0f / 3.0f, 0.375f, 0.5f, 2.0f / 3.0f, 0.75f,
+                                         1.0f, 4.0f / 3.0f, 1.5f, 2.0f, 3.0f, 4.0f};
+static uint32_t dsync_ix(uint32_t x) { return x * NDSYNC / 128u; }
 /* the LFO on the arpeggiator's clock (LFO CLK: ARP): RATE picks a note value, as the plugin's synced rates
  * (8 bars dotted .. a 64th triplet); its length in beats */
 static const char *const LSYNC_DIV[30] = {"8.D", "8", "4.D", "8.T", "4", "2.D", "4.T", "2", "1.D", "2.T", "1",
@@ -315,11 +340,38 @@ static void params_from(const uint8_t *v, MBParams *p)
 
 /* ----------------------------------------------------------------- engine --- */
 static MBVoice voice;
+/* the effects: a block behind the voice, on the second core while the first renders the next block (or after it,
+ * on one core); the dry signal goes out at once, so only the effects are a block (5.8 ms) later */
+static MBFx fx;
+static int16_t fx_mem[MBFX_MEM] PLAT_POOL;
+static float fx_in[APP_BLOCK], fx_wl[APP_BLOCK], fx_wr[APP_BLOCK];
+static uint32_t fx_n;                        /* fx_in's samples (the last block's voice) */
+static MBFxParams fx_now;                    /* as the audio side has them */
+static float fx_beats_now;
+static volatile uint8_t fx_cores;            /* 2: the last block's effects ran on the second core */
+static void fx_job(uint32_t n) { mbfx_process(&fx, fx_in, fx_wl, fx_wr, (int)n); }
 static float buf[APP_BLOCK];
 _Static_assert(sizeof(MBParams) % 4u == 0, "MBParams: copied a word at a time");
 static MBParams par[2];                  /* the main loop writes the one not posted last */
 static uint8_t par_ix;
 static volatile uint32_t par_posted, par_done;
+static MBFxParams fxpar[2];               /* the effects' (posted with par[]) */
+static float fxbeats[2];                  /* the delay on the clock: its length in beats (0: free) */
+
+static void fx_params_from(const uint8_t *v, MBFxParams *f, float *beats)
+{
+    f->d_time_s = dtime_s(v[P_DTIME]);
+    f->d_fb = lvl(v[P_DFB]);
+    f->d_lp_hz = dlp_hz(v[P_DTONE]);
+    f->d_mix = lvl(v[P_DMIX]);
+    f->d_pp = v[P_DMODE];
+    f->r_decay = rdecay(v[P_RDECAY]);
+    f->r_size = rsize(v[P_RSIZE]);
+    f->r_damp = lvl(v[P_RDAMP]);
+    f->r_mix = lvl(v[P_RMIX]);
+    f->r_pre_s = rpre_s(v[P_RPRE]);
+    *beats = v[P_DSYNC] ? DSYNC_BEATS[dsync_ix(v[P_DTIME])] : 0.0f;
+}
 
 /* the main loop's events for the audio interrupt: one writer (the main loop), one reader (app_render) */
 enum { Q_ON, Q_OFF, Q_PAR, Q_WHEEL, Q_AT, Q_ALLOFF, Q_ARP, Q_SEQ };
@@ -638,6 +690,8 @@ static void events(void)                     /* audio interrupt */
                 uint32_t *t = (uint32_t *)(void *)&voice.p, j;
                 for (j = 0; j < sizeof voice.p / 4u; j++)
                     t[j] = f[j];
+                fx_now = fxpar[a & 1u];
+                fx_beats_now = fxbeats[a & 1u];
             }
             par_done = b;
             break;
@@ -748,14 +802,38 @@ static void midi_in(void)                    /* audio interrupt */
 static int16_t scope_cap[SCOPE_N];
 static volatile uint32_t scope_w;
 
+static inline float ceiling(float y)          /* a soft ceiling above -2 dB (loud resonant BP/HP), not a hard clip */
+{
+    float a = fm_fabsf(y);
+    if (a > 0.8f)
+        y = (y > 0.0f ? 1.0f : -1.0f) * (0.8f + 0.2f * fm_tanhf((a - 0.8f) * 5.0f));
+    return y;
+}
+
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     uint32_t i, w = scope_w;
     float g = (float)master_q12 * (1.0f / 4096.0f) * 8388000.0f;
     if (n > APP_BLOCK)
         n = APP_BLOCK;
+    uint32_t fn = fx_n;
+    int fx_run = 0, on2 = 0;
+    float dry;
     events();
     midi_in();
+    {   /* the last block's effects: handed to the second core (or done after the voice) */
+        MBFxParams q = fx_now;
+        if (fx_beats_now > 0.0f)
+            q.d_time_s = fx_beats_now * 60.0f / arp_tempo_now();
+        dry = mbfx_dry_gain(&q);
+        if (fn && (q.d_mix > 0.001f || q.r_mix > 0.001f || fx.d_on || fx.r_on)) {
+            mbfx_set(&fx, &q);
+            for (i = 0; i < fn; i++)
+                fx_wl[i] = fx_wr[i] = 0.0f;
+            fx_run = 1;
+            on2 = plat_cpu2_run(fx_job, fn);
+        }
+    }
     {   /* the voice, cut where the arpeggiator's notes start and end */
         uint32_t off = 0, guard = 0;
         while (off < n && guard++ < 64u) {
@@ -800,15 +878,27 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             }
         }
     }
-    for (i = 0; i < n; i++) {
-        float y = buf[i], a = fm_fabsf(y);
-        if (a > 0.8f)                        /* a soft ceiling above -2 dB (loud resonant BP/HP), not a hard clip */
-            y = (y > 0.0f ? 1.0f : -1.0f) * (0.8f + 0.2f * fm_tanhf((a - 0.8f) * 5.0f));
-        int32_t s = (int32_t)(y * g);
-        lr[2u * i] = s;
-        lr[2u * i + 1u] = s;
-        scope_cap[(w + i) % SCOPE_N] = (int16_t)(y * 32767.0f);
+    if (fx_run) {
+        if (!on2 || plat_cpu2_wait() < 0)
+            fx_job(fn);
+        fx_cores = on2 ? 2u : 1u;
+    } else {
+        fn = 0;
     }
+    for (i = 0; i < n; i++) {
+        float y = buf[i], yl = dry * y, yr = yl;
+        if (i < fn) {
+            yl += fx_wl[i];
+            yr += fx_wr[i];
+        }
+        yl = ceiling(yl);
+        yr = ceiling(yr);
+        lr[2u * i] = (int32_t)(yl * g);
+        lr[2u * i + 1u] = (int32_t)(yr * g);
+        scope_cap[(w + i) % SCOPE_N] = (int16_t)(0.5f * (yl + yr) * 32767.0f);
+        fx_in[i] = y;                        /* (the next block's effects take this one) */
+    }
+    fx_n = n;
     scope_w = w + n;
     if (!voice.gate && voice.ast == 0)
         voice_note = -1;
@@ -827,6 +917,7 @@ static void params_post(void)                /* set.cur to the engine */
     uint32_t gen = par_posted + 1u;
     par_ix ^= 1u;
     params_from(set.cur.v, &par[par_ix]);
+    fx_params_from(set.cur.v, &fxpar[par_ix], &fxbeats[par_ix]);
     bend_range = (uint8_t)(set.cur.v[P_BEND] + 1u);
     par_posted = gen;
     post(Q_PAR, par_ix, gen & 0xFFFFu);
@@ -856,24 +947,29 @@ static void settings_defaults(void)
 
 static uint8_t arp_posted;                   /* the arpeggiator's state the audio side was told */
 
-static int bank_migrate(void)                /* 0.8's bank (47 parameters a patch): the arpeggiator off added */
+static int bank_migrate(void)                /* an older bank (47 or 52 parameters a patch): the rest as INIT */
 {
-    typedef struct { char name[8]; uint8_t v[NP_OLD]; } old_t;
-    const uint32_t old_size = 4u + NSLOT * (uint32_t)sizeof(old_t);
-    uint32_t i, j;
-    if (old_size > sizeof bank || plat_store_size(OBJ_BANK) != (int)old_size ||
-        plat_store_load(OBJ_BANK, &bank, sizeof bank) != (int)old_size || bank.magic != BANK_MAGIC_OLD)
-        return 0;
-    for (i = NSLOT; i-- > 0u;) {             /* (from the last: each new patch is longer than its old one) */
-        const old_t *op = (const old_t *)(const void *)((const uint8_t *)bank.slot + i * sizeof(old_t));
-        old_t o = *op;
-        for (j = 0; j < 8u; j++)
-            bank.slot[i].name[j] = o.name[j];
-        for (j = 0; j < NP; j++)
-            bank.slot[i].v[j] = j < NP_OLD ? o.v[j] : INIT_V[j];
+    static const struct { uint32_t magic, np; } OLD[] = {{0x4D423144u, NP_08}, {0x4D423145u, NP_09}};
+    uint32_t k, i, j, size = (uint32_t)plat_store_size(OBJ_BANK);
+    for (k = 0; k < sizeof OLD / sizeof OLD[0]; k++) {
+        uint32_t so = 8u + OLD[k].np;
+        if (size != 4u + NSLOT * so || size > sizeof bank ||
+            plat_store_load(OBJ_BANK, &bank, sizeof bank) != (int)size || bank.magic != OLD[k].magic)
+            continue;
+        for (i = NSLOT; i-- > 0u;) {         /* (from the last: each new patch is longer than its old one) */
+            uint8_t o[8u + NP];
+            const uint8_t *src = (const uint8_t *)bank.slot + i * so;
+            for (j = 0; j < so; j++)
+                o[j] = src[j];
+            for (j = 0; j < 8u; j++)
+                bank.slot[i].name[j] = (char)o[j];
+            for (j = 0; j < NP; j++)
+                bank.slot[i].v[j] = j < OLD[k].np ? o[8u + j] : INIT_V[j];
+        }
+        bank.magic = BANK_MAGIC;
+        return 1;
     }
-    bank.magic = BANK_MAGIC;
-    return 1;
+    return 0;
 }
 
 void app_init(void)
@@ -914,6 +1010,8 @@ void app_init(void)
         sq.pat[i].len = (uint8_t)seq_len(&sq.pat[i]);
     params_from(set.cur.v, &voice.p);
     mb_init(&voice, 44100.0f);
+    mbfx_init(&fx, 44100.0f, fx_mem);
+    (void)plat_cpu2_set(1);                  /* the second core for the effects (here only: at power-on) */
     params_post();
     events();                                /* (no audio yet: the patch in place before the first render) */
 }
@@ -921,7 +1019,7 @@ void app_init(void)
 /* ------------------------------------------------------------ the loader --- */
 /* patches over USB SysEx: F0 7D 4D 42 CMD ... F7 (7D: non-commercial; "MB")
  *   01 SLOT NAME[8] V[NP]   a patch into a slot (SLOT 0..31; NAME ASCII; V: each parameter 0..127, PARAM's order:
- *                           52; 0.8's 47 taken, the arpeggiator off);
+ *                           63; 0.8's 47 and 0.9's 52 taken, the rest as INIT);
  *                           kept in RAM until 02. The slot playing: played at once
  *   02                      the slots stored in the flash
  *   03                      the factory slots back (stored)
@@ -952,9 +1050,9 @@ int app_sysex(const uint8_t *p, uint32_t n)
     if (n < 4u || p[0] != 0x7Du || p[1] != 0x4Du || p[2] != 0x42u)
         return 0;
     cmd = p[3];
-    if (cmd == 1u && (n == 5u + 8u + NP || n == 5u + 8u + NP_OLD) && p[4] < NSLOT) {
+    if (cmd == 1u && (n == 13u + NP || n == 13u + NP_08 || n == 13u + NP_09) && p[4] < NSLOT) {
         patch_t *d = &bank.slot[p[4]];
-        uint32_t nv = n - 13u;               /* (0.8's 47: the arpeggiator off) */
+        uint32_t nv = n - 13u;               /* (an older loader's 47 or 52: the rest as INIT) */
         for (i = 0; i < 8u; i++)
             d->name[i] = p[5u + i] >= 32u && p[5u + i] < 127u ? (char)p[5u + i] : ' ';
         for (i = 0; i < NP; i++)
@@ -1181,6 +1279,32 @@ static void value_text(uint32_t i, uint32_t x, char *b)
         break;
     case T_ONOFF:
         text_cat(b, ONOFF_NAME[x & 1u]);
+        break;
+    case T_DTIME:                            /* (the patch on screen: free or on the clock) */
+        if (set.cur.v[P_DSYNC])
+            text_cat(b, DSYNC_DIV[dsync_ix(x)]);
+        else
+            time_text(dtime_s(x), b);
+        break;
+    case T_DTONE:
+        hz_text(dlp_hz(x), b);
+        break;
+    case T_RDEC:
+        int_text((int32_t)(rdecay(x) * 100.0f + 0.5f), b);
+        text_cat(b, "%");
+        break;
+    case T_RSIZE:
+        dec1_text(rsize(x), b);
+        break;
+    case T_RPRE:
+        int_text((int32_t)(rpre_s(x) * 1000.0f + 0.5f), b);
+        text_cat(b, " MS");
+        break;
+    case T_DSYNC:
+        text_cat(b, DSYNC_NAME[x & 1u]);
+        break;
+    case T_DMODE:
+        text_cat(b, DMODE_NAME[x & 1u]);
         break;
     }
 }
@@ -1621,7 +1745,7 @@ static void draw(void)
     cv_begin(240, 136, C_BLACK);
     cv_text(8, 0, &FONT_XS, pg->title, C_ACCENT);
     for (i = 0; i < NPAGE; i++)              /* where the page is among them */
-        cv_rect(118 + (int32_t)i * 8, 4, 6, 4, i == set.page ? C_ACCENT : C_LINE);
+        cv_rect(112 + (int32_t)i * 7, 4, 5, 4, i == set.page ? C_ACCENT : C_LINE);
     if (seq_running || seq_rec) {            /* the sequencer: the step playing (or the next to enter) */
         const seqpat_t *pt = seq_pat();
         char o[8];
@@ -1632,7 +1756,7 @@ static void draw(void)
         text_cat(t, "/");
         int_text((int32_t)seq_len(pt), o);
         text_cat(t, o);
-        cv_text(64, 0, &FONT_XS, t, seq_rec ? C_ACCENT : C_HI);
+        cv_text(58, 0, &FONT_XS, t, seq_rec ? C_ACCENT : C_HI);
     }
     for (i = 0; i < 4u; i++) {
         uint32_t p = pg->p[i], v;
@@ -1677,6 +1801,8 @@ static void draw(void)
         cv_text(160, 16, &FONT_XS, "XRUN", C_GRAY);
         int_text((int32_t)plat_xruns(), t);
         cv_text(196, 16, &FONT_XS, t, plat_xruns() ? C_ACCENT : C_HI);
+        if (fx_cores)                        /* where the effects run: 2C the second core, 1C the first */
+            cv_text(222, 16, &FONT_XS, fx_cores == 2u ? "2C" : "1C", C_DIM);
     }
     {
         uint32_t w = scope_w, j;
@@ -1759,6 +1885,17 @@ int app_expect(const char *what, int *got)
         *got = set.cur.v[P_ARP];
     else if (!strcmp(what, "arpstate"))     /* as the audio side has it */
         *got = arp.state;
+    else if (!strcmp(what, "fxcores"))
+        *got = fx_cores;
+    else if (!strcmp(what, "fxpeak")) {    /* the last block's effects, the louder side, x1000 */
+        float m = 0.0f;
+        for (uint32_t i = 0; i < APP_BLOCK; i++) {
+            float a = fm_fabsf(fx_wl[i]) > fm_fabsf(fx_wr[i]) ? fm_fabsf(fx_wl[i]) : fm_fabsf(fx_wr[i]);
+            if (a > m)
+                m = a;
+        }
+        *got = (int)(m * 1000.0f);
+    }
     else if (!strcmp(what, "seqrun"))
         *got = seq.run;
     else if (!strcmp(what, "seqrec"))

@@ -12,6 +12,8 @@ out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
 - **Performance:** an arpeggiator after the Minibrute's (saved with each patch), and a 64-step sequencer after the
   KeyStep's with 8 patterns (step entry and recording in time; notes, velocity, rests, ties), on one clock: tempo,
   tap tempo or MIDI clock.
+- **Effects:** a stereo delay (ping-pong, tempo sync) and a plate reverb, saved with each patch, on the FM-1's
+  second core.
 - **The panel:** see [the manual](app/docs/MANUAL.md).
 
 | Path | What |
