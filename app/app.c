@@ -384,6 +384,7 @@ static MBFx fx;
 static int16_t fx_mem[MBFX_MEM] PLAT_POOL;
 static float fx_in[APP_BLOCK], fx_wl[APP_BLOCK], fx_wr[APP_BLOCK];
 static uint32_t fx_n;                        /* fx_in's samples (the last block's voice) */
+static uint32_t fx_silent_n;                 /* samples the voice has been silent for */
 static MBFxParams fx_now;                    /* as the audio side has them */
 static float fx_beats_now;
 static volatile uint8_t fx_cores;            /* 2: the last block's effects ran on the second core */
@@ -878,12 +879,16 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             q.d_time_s = fx_beats_now * 60.0f / arp_tempo_now();
         dry = mbfx_dry_gain(&q);
         fx_full = mbfx_full(&q);
-        int quiet = fx.alive < 1e-5f;        /* (the effects silent, and the voice too: nothing to do) */
-        for (i = 0; quiet && i < fn; i++)
-            quiet = fm_fabsf(fx_in[i]) < 1e-6f;
+        /* idle: the voice silent for longer than the delay's time (its first repeat still to come), and the effects
+         * silent too: nothing to do */
+        int silent = 1, quiet;
+        for (i = 0; silent && i < fn; i++)
+            silent = fm_fabsf(fx_in[i]) < 1e-6f;
+        fx_silent_n = silent ? fx_silent_n + fn : 0u;
+        quiet = silent && fx.alive < 1e-5f && (float)fx_silent_n > (q.d_mix > 0.001f ? q.d_time_s * 44100.0f : 0.0f) + 8820.0f;
         if (quiet)
-            fx.d_on = 0;                     /* (idle: the delay starts afresh when it is next heard) */
-        if (fn && !quiet && (q.d_mix > 0.001f || q.r_mix > 0.001f || fx.d_on || fx.r_run)) {
+            fx.d_on = 0;                     /* (the delay starts afresh when it is next heard) */
+        if (fn && !quiet && (fx_full || q.d_mix > 0.001f || q.r_mix > 0.001f || fx.d_on || fx.r_run)) {
             mbfx_set(&fx, &q);
             for (i = 0; i < fn; i++)
                 fx_wl[i] = fx_wr[i] = 0.0f;

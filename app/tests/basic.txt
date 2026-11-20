@@ -725,3 +725,95 @@ wait 300
 expect fxpeak >20
 key 7 up
 wait 300
+# the distortion alone (delay and reverb off; the compressor off): heard (0.11.0 was silent)
+tap HOME
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 17
+turn K2 -30
+wait 30
+tap HOME
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 12
+turn K4 -64
+wait 30
+tap HOME
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 13
+turn K4 -64
+wait 30
+tap HOME
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 16
+turn K4 -64
+wait 30
+tap HOME
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 15
+expect p67 64
+wait 600
+key 7 down
+wait 200
+expect fxpeak >20
+key 7 up
+wait 300
+# a short note into the delay alone: its repeat comes (0.11.0 dropped it when the note ended first)
+turn K4 -64
+wait 30
+tap HOME
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 12
+turn K4 64
+wait 2000
+tapkey 7
+wait 500
+expect fxpeak >5
