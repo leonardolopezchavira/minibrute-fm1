@@ -160,3 +160,315 @@ expect p0 10
 sysex F0 7D 4D 42 03 F7
 wait 30
 expect p0 30
+# the arpeggiator: ARP on (its page shows), two keys: C4 and E4 in turn, an 8th apart at 120 BPM
+tap HOME
+wait 30
+tap ARP
+wait 30
+expect arp 1
+expect page 12
+expect tempo 120
+key 7 down
+key 11 down
+wait 60
+expect arpn 2
+expect note 60
+wait 250
+expect note 64
+wait 250
+expect note 60
+shot arp.png
+key 7 up
+key 11 up
+wait 300
+expect arpn 0
+expect note -1
+# 2 octaves: C4 E4 C5 E5
+turn K2 1
+wait 30
+key 7 down
+key 11 down
+wait 60
+expect note 60
+wait 250
+expect note 64
+wait 250
+expect note 72
+wait 250
+expect note 76
+key 7 up
+key 11 up
+wait 300
+turn K2 -1
+# HOLD: the chord plays on with the keys up; a new key with none held starts a new one
+tap ARP
+wait 30
+expect arp 2
+key 7 down
+wait 30
+key 7 up
+wait 320
+expect arpn 1
+expect arplast 60
+key 9 down
+wait 30
+key 9 up
+wait 300
+expect arpn 1
+expect arplast 62
+# ARP 2 (SEQ): TEMPO
+tap SEQ
+wait 30
+expect page 13
+turn K1 30
+wait 30
+expect tempo 150
+shot arp2.png
+tap ARP
+wait 30
+expect arp 0
+expect arpn 0
+expect note -1
+# MIDI clock: 24 a beat, 25 ms apart in the script (about 92 BPM with the simulator's own step per message): followed
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+midi F8
+wait 25
+expect tempo >88
+expect tempo <103
