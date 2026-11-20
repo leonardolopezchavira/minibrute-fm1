@@ -45,7 +45,9 @@ typedef struct {
     /* the filter's modes as the Steiner-Parker network gives them (the signal into its LP, BP or HP input): each mode
      * a mix of the low-, band- and high-pass responses (LP, BP, HP, NOTCH x L, B, H) */
     float mode_mix[12];
-    float mode_damp[4], mode_fr[4];   /* per mode: the resonance's damping and its frequency, relative to LP's */   /* (mt_norm: the level, as the folds grow) */               /* the output's coupling capacitors: the DC the saturations make goes, Hz */                /* the filter's input coupling (a capacitor in the hardware), Hz */                /* Brute Factor: the feedback path's AC coupling (a capacitor in the hardware), Hz */               /* Brute Factor: the VCA's saturation on the signal fed back to the mixer */  /* resonance loop self-limiting: damping rises with the band level */             /* passband (bass) loss with resonance: negative low-pass feedback */         /* soft limiter on the resonant output below self-oscillation */              /* wheel->cutoff octaves = oct*x*(1 - curve*x), x = AMT*wheel */                 /* filter frequency correction at knob 100, 200, 1k, 5k, 20k Hz (non-ringing) */             /* resonance where the ringing-harmonic shaper begins */                  /* fixed low-pass on the sub's sine shape (Hz) */     /* harmonic shaper used while ringing */   /* at knob 150,300,500,800,1200,2000,3000,5000,8000 Hz */
+    float mode_damp[4], mode_fr[4];   /* per mode: the resonance's damping and its frequency, relative to LP's */
+    float mt_phase, mt_d1, mt_k, mt_a1;  /* Metalizer: the folded path's lag behind the clean triangle (cycles); the
+                                          * offset's and the amount's slope with the knob; the input stage's rounding */
 } MBCal;
 extern MBCal mb_cal;
 #endif

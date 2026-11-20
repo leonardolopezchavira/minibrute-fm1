@@ -91,15 +91,19 @@ MBCal mb_cal = {
     .us_shape = 0.948624f,
     .us_gain = 2.16012f,
     .us_phase1 = 0.0f,
-    .mt_g0 = 0.357127f,
-    .mt_g1 = 0.423589f,
-    .mt_pw = 1.06616f,
-    .mt_a0 = 2.71306f,
-    .mt_d = 1.58136f,
+    .mt_g0 = 0.2528f,
+    .mt_g1 = 0.5809f,
+    .mt_pw = 1.0867f,
+    .mt_a0 = 2.5913f,
+    .mt_d = 1.6454f,
     .mt_norm = 0.5f,
     .mode_mix = { 1.0f, 0.0f, 0.0f,  0.0028f, 0.9791f, 0.0f,  0.0491f, 1.9803f, 1.0579f,  1.0216f, 1.95f, 0.983f },
     .mode_damp = { 0.0f, 11.257f, 3.5502f, 2.3058f },
     .mode_fr = { 1.0f, 1.0776f, 1.2921f, 0.9257f },
+    .mt_phase = 0.0491f,
+    .mt_d1 = -0.1242f,
+    .mt_k = 0.5766f,
+    .mt_a1 = 0.1222f,
 };
 #define C mb_cal
 /* ---- helpers ----------------------------------------------------------------------- */
@@ -177,9 +181,14 @@ static float metal_wave(float ph, float m, float f0, float sr) {
     (void)sr;
     tri = tri_skewed(ph, C.tri_skew);
     if (m <= 0.f || fade <= 0.f) return tri;
+    const float mt_kn = 1.f / fast_tanh(C.mt_k);
     g = C.mt_g0 + C.mt_g1 * mb_powf(m, C.mt_pw);
-    a = C.mt_a0 * clampf(m * 10.f, 0.f, 1.f) * fade;    /* (the knob's second gang brings the folds in) */
-    y = fold_stage(fold_stage(fold_stage(fold_stage(g * tri + C.mt_d))));
+    a = (C.mt_a0 + C.mt_a1 * m) * clampf(m * 10.f, 0.f, 1.f) * fade;   /* (the knob's second gang brings the folds in) */
+    {   /* the folded path: the triangle a little behind the clean one, rounded by the input stage, offset */
+        float t2 = 1.f - 4.f * mb_fabsf(frac(ph - C.mt_phase + 1.f) - 0.5f);
+        t2 = fast_tanh(C.mt_k * t2) * mt_kn;
+        y = fold_stage(fold_stage(fold_stage(fold_stage(clampf(g * t2 + C.mt_d + C.mt_d1 * m, -10.8f, 10.8f)))));
+    }
     return (tri + a * y * (1.f / 10.8f)) / (1.f + C.mt_norm * m);
 }
 #endif
