@@ -46,7 +46,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | TOUCH | FX | AT VIB | AT CUT | PW ENV | MTL ENV |
 | DELAY | FX | TIME | FEEDBACK | TONE | MIX |
 | REVERB | FX | DECAY | SIZE | DAMP | MIX |
-| FX 2 | FX | DLY SYNC | DLY MODE | PRE-DLY |  |
+| FX 2 | FX | DLY SYNC | DLY MODE | PRE-DLY | FX ORDER |
 | ARP | ARP | MODE | OCTAVE | STEP | SWING |
 | ARP 2 | ARP (held) | TEMPO | ARP | HOLD ORD | LFO CLK |
 | SEQ | SEQ | PATTERN | LENGTH | STEP | SWING |
@@ -91,7 +91,8 @@ LFO CLK belong to the instrument (one tempo for every patch).
 
 ## The effects
 
-A delay and then a reverb, after the plugin's (its usual order); saved with each patch. They are stereo: the
+A delay and a reverb, after the plugin's; saved with each patch. **FX ORDER** (FX 2): DLY>REV (the repeats into the
+reverb, the usual) or REV>DLY (the reverb's tail repeated), as each of the plugin's presets has them. They are stereo: the
 voice in the middle, the repeats and the reverb around it. With MIX at 0 an effect is off; half way, dry and wet are
 both at -3 dB (an equal-power crossfade, as the plugin's). Matched to the plugin's delay and reverb by measurement.
 
@@ -210,6 +211,7 @@ sent out over USB and Bluetooth.
 | 118 | DAMP | REVERB |
 | 119 | MIX | REVERB |
 | 14 | PRE-DLY | FX 2 |
+| 15 | FX ORDER | FX 2 |
 | 97 | AT VIB | TOUCH |
 | 98 | AT CUT | TOUCH |
 | 99 | PW ENV | TOUCH |

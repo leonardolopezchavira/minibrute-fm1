@@ -27,6 +27,7 @@ typedef struct {
     float r_damp;                         /* 0..1 */
     float r_mix;                          /* 0..1 (0: the reverb is off) */
     float r_pre_s;                        /* pre-delay, 0..0.2 s */
+    uint32_t order;                       /* 0: delay, then reverb; 1: reverb, then delay */
 } MBFxParams;
 
 typedef struct { int16_t *buf; uint32_t len, w; } MBFxLine;

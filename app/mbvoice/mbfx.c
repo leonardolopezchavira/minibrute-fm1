@@ -172,6 +172,7 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
     const float lr_c = 0.99999998f, lr_s = 6.2831853f * 1.0f / f->sr;   /* (1 Hz a step: cos, sin) */
     uint32_t a1[2], d1[2], a2[2], d2[2];
     float r_alive = 0.0f, r_gain = RV_GAIN;
+    int rev_first = p->order == 1u;
     if (pre < 1u)
         pre = 1u;
     if (pre > MBFX_PRE_LEN - 1u)
@@ -227,99 +228,195 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
         d2[j] = sc(DL2[j], k);
     }
     for (i = 0; i < n; i++) {
-        float x = in[i], yl = 0.0f, yr = 0.0f, dl_, dr_, ax;
-        if (d_on) {
-            float d = f->d_cur += 0.0005f * (target - f->d_cur);   /* (a time turned: glides, as tape) */
-            uint32_t di = (uint32_t)d, w = f->dw;
-            float fr = d - (float)di;
-            int fresh = di + 1u < f->d_fill;   /* (not yet written that far back: silence) */
-            if (!pp) {                        /* the right a little later than the left (the plugin's STEREO) */
-                uint32_t r0 = (w - di) & mask, r1 = (w - di - 1u) & mask;
-                float a = fresh ? from16(f->dl[r0]) + fr * (from16(f->dl[r1]) - from16(f->dl[r0])) : 0.0f;
-                float dr = d * DL_RSTRETCH;
-                uint32_t dri = (uint32_t)dr, q0 = (w - dri) & mask, q1 = (w - dri - 1u) & mask;
-                float frr = dr - (float)dri;
-                float b = dri + 1u < f->d_fill ? from16(f->dl[q0]) + frr * (from16(f->dl[q1]) - from16(f->dl[q0])) : 0.0f;
-                float h;
-                f->d_lpa += lpc * (a - f->d_lpa);       /* (two poles: 12 dB an octave, as the plugin's) */
-                f->d_lpa2 += lpc * (f->d_lpa - f->d_lpa2);
-                f->d_lpb += lpc * (b - f->d_lpb);
-                f->d_lpb2 += lpc * (f->d_lpb - f->d_lpb2);
-                f->d_hpa += hpc * (f->d_lpa2 - f->d_hpa);
-                h = f->d_lpa2 - f->d_hpa;
-                f->dl[w & mask] = to16(x + fb * h);
-                yl = f->d_lpa2;
-                yr = f->d_lpb2;
-            } else {                          /* two lines, each feeding the other: L, R, L, ... */
-                int16_t *A = f->dl, *B = f->dl + half;
-                uint32_t r0 = (w - di) & mask, r1 = (w - di - 1u) & mask;
-                float a = fresh ? from16(A[r0]) + fr * (from16(A[r1]) - from16(A[r0])) : 0.0f;
-                float b = fresh ? from16(B[r0]) + fr * (from16(B[r1]) - from16(B[r0])) : 0.0f;
-                float ha, hb;
-                f->d_lpa += lpc * (a - f->d_lpa);
-                f->d_lpa2 += lpc * (f->d_lpa - f->d_lpa2);
-                f->d_lpb += lpc * (b - f->d_lpb);
-                f->d_lpb2 += lpc * (f->d_lpb - f->d_lpb2);
-                f->d_hpa += hpc * (f->d_lpa2 - f->d_hpa);
-                f->d_hpb += hpc * (f->d_lpb2 - f->d_hpb);
-                ha = f->d_lpa2 - f->d_hpa;
-                hb = f->d_lpb2 - f->d_hpb;
-                A[w & mask] = to16(x + fb * hb);   /* (FEEDBACK once a round: each side's repeats fall by it) */
-                B[w & mask] = to16(ha);
-                yl = f->d_lpa2 + DL_LEAK * f->d_lpb2;
-                yr = f->d_lpb2 + DL_LEAK * f->d_lpa2;
+        /* ORDER DLY>REV: the delay, then the reverb on its output; REV>DLY: the reverb first, the delay on its output.
+         * What goes out is the wet part only (the dry, dd x rd x the input, the caller's) */
+        float x = in[i], yl = 0.0f, yr = 0.0f, rl = 0.0f, rr = 0.0f, ax, xd = x, xr = x;
+        if (rev_first) {
+            if (r_on || f->r_run) {
+                float v, lo, ro, m0, m1;
+                line_put(&f->pre, r_on ? xr : 0.0f);
+                v = line_tap(&f->pre, pre);
+                f->r_lp_in += RV_INLP * (v - f->r_lp_in);   /* the input's bandwidth */
+                v = allpass(&f->in_ap[0], f->r_lp_in, 0.75f, IN_AP[0]);
+                v = allpass(&f->in_ap[1], v, 0.75f, IN_AP[1]);
+                v = allpass(&f->in_ap[2], v, 0.625f, IN_AP[2]);
+                v = allpass(&f->in_ap[3], v, 0.625f, IN_AP[3]);
+                {
+                    float c = f->r_lc * lr_c - f->r_ls * lr_s;
+                    f->r_ls = f->r_ls * lr_c + f->r_lc * lr_s;
+                    f->r_lc = c;
+                }
+                m0 = EXCURSION * 0.5f * (1.0f + f->r_ls);
+                m1 = EXCURSION * 0.5f * (1.0f + f->r_lc);
+                for (j = 0; j < 2u; j++) {           /* the tanks: each fed the other's end */
+                    float t = v + dec * f->r_tank_fb[j ^ 1u];
+                    t = allpass_f(&f->ap1[j], t, -0.7f, (float)a1[j] + (j ? m1 : m0));
+                    line_put(&f->dl1[j], t);
+                    t = line_tap(&f->dl1[j], d1[j]);
+                    f->r_damp_st[j] += (1.0f - damp) * (t - f->r_damp_st[j]);
+                    t = allpass(&f->ap2[j], f->r_damp_st[j] * dec, 0.5f, a2[j]);
+                    line_put(&f->dl2[j], t);
+                    f->r_tank_fb[j] = line_tap(&f->dl2[j], d2[j]);
+                }
+                /* the outputs: Dattorro's taps (scaled to 44.1 kHz and the size) */
+                lo = line_tap(&f->dl1[1], sc(394, k)) + line_tap(&f->dl1[1], sc(4407, k)) -
+                     line_tap(&f->ap2[1], sc(2835, k)) + line_tap(&f->dl2[1], sc(2958, k)) -
+                     line_tap(&f->dl1[0], sc(2949, k)) - line_tap(&f->ap2[0], sc(277, k)) -
+                     line_tap(&f->dl2[0], sc(1580, k));
+                ro = line_tap(&f->dl1[0], sc(523, k)) + line_tap(&f->dl1[0], sc(5375, k)) -
+                     line_tap(&f->ap2[0], sc(1820, k)) + line_tap(&f->dl2[0], sc(3961, k)) -
+                     line_tap(&f->dl1[1], sc(3128, k)) - line_tap(&f->ap2[1], sc(496, k)) -
+                     line_tap(&f->dl2[1], sc(179, k));
+                rl = r_gain * (lo + RV_XC * ro);
+                rr = r_gain * (ro + RV_XC * lo);
+                ax = mb_fabsf(v) + mb_fabsf(f->r_tank_fb[0]) + mb_fabsf(f->r_tank_fb[1]);
+                if (ax > r_alive)
+                    r_alive = ax;
             }
-            f->dw = (w + 1u) & mask;
-            if (f->d_fill <= mask)
-                f->d_fill++;
-            ax = mb_fabsf(yl) + mb_fabsf(yr);
-            if (ax > f->alive)
-                f->alive = ax;
-        }
-        dl_ = dd * x + dm * yl;
-        dr_ = dd * x + dm * yr;
-        outL[i] += rd * dm * yl;
-        outR[i] += rd * dm * yr;
-        if (r_on || f->r_run) {
-            float v, lo, ro, m0, m1;
-            line_put(&f->pre, r_on ? 0.5f * (dl_ + dr_) : 0.0f);
-            v = line_tap(&f->pre, pre);
-            f->r_lp_in += RV_INLP * (v - f->r_lp_in);   /* the input's bandwidth */
-            v = allpass(&f->in_ap[0], f->r_lp_in, 0.75f, IN_AP[0]);
-            v = allpass(&f->in_ap[1], v, 0.75f, IN_AP[1]);
-            v = allpass(&f->in_ap[2], v, 0.625f, IN_AP[2]);
-            v = allpass(&f->in_ap[3], v, 0.625f, IN_AP[3]);
-            {
-                float c = f->r_lc * lr_c - f->r_ls * lr_s;
-                f->r_ls = f->r_ls * lr_c + f->r_lc * lr_s;
-                f->r_lc = c;
+            xd = rd * x + rm * 0.5f * (rl + rr);
+            if (d_on) {
+                float d = f->d_cur += 0.0005f * (target - f->d_cur);   /* (a time turned: glides, as tape) */
+                uint32_t di = (uint32_t)d, w = f->dw;
+                float fr = d - (float)di;
+                int fresh = di + 1u < f->d_fill;   /* (not yet written that far back: silence) */
+                if (!pp) {                        /* the right a little later than the left (the plugin's STEREO) */
+                    uint32_t r0 = (w - di) & mask, r1 = (w - di - 1u) & mask;
+                    float a = fresh ? from16(f->dl[r0]) + fr * (from16(f->dl[r1]) - from16(f->dl[r0])) : 0.0f;
+                    float dr = d * DL_RSTRETCH;
+                    uint32_t dri = (uint32_t)dr, q0 = (w - dri) & mask, q1 = (w - dri - 1u) & mask;
+                    float frr = dr - (float)dri;
+                    float b = dri + 1u < f->d_fill ? from16(f->dl[q0]) + frr * (from16(f->dl[q1]) - from16(f->dl[q0])) : 0.0f;
+                    float h;
+                    f->d_lpa += lpc * (a - f->d_lpa);       /* (two poles: 12 dB an octave, as the plugin's) */
+                    f->d_lpa2 += lpc * (f->d_lpa - f->d_lpa2);
+                    f->d_lpb += lpc * (b - f->d_lpb);
+                    f->d_lpb2 += lpc * (f->d_lpb - f->d_lpb2);
+                    f->d_hpa += hpc * (f->d_lpa2 - f->d_hpa);
+                    h = f->d_lpa2 - f->d_hpa;
+                    f->dl[w & mask] = to16(xd + fb * h);
+                    yl = f->d_lpa2;
+                    yr = f->d_lpb2;
+                } else {                          /* two lines, each feeding the other: L, R, L, ... */
+                    int16_t *A = f->dl, *B = f->dl + half;
+                    uint32_t r0 = (w - di) & mask, r1 = (w - di - 1u) & mask;
+                    float a = fresh ? from16(A[r0]) + fr * (from16(A[r1]) - from16(A[r0])) : 0.0f;
+                    float b = fresh ? from16(B[r0]) + fr * (from16(B[r1]) - from16(B[r0])) : 0.0f;
+                    float ha, hb;
+                    f->d_lpa += lpc * (a - f->d_lpa);
+                    f->d_lpa2 += lpc * (f->d_lpa - f->d_lpa2);
+                    f->d_lpb += lpc * (b - f->d_lpb);
+                    f->d_lpb2 += lpc * (f->d_lpb - f->d_lpb2);
+                    f->d_hpa += hpc * (f->d_lpa2 - f->d_hpa);
+                    f->d_hpb += hpc * (f->d_lpb2 - f->d_hpb);
+                    ha = f->d_lpa2 - f->d_hpa;
+                    hb = f->d_lpb2 - f->d_hpb;
+                    A[w & mask] = to16(xd + fb * hb);   /* (FEEDBACK once a round: each side's repeats fall by it) */
+                    B[w & mask] = to16(ha);
+                    yl = f->d_lpa2 + DL_LEAK * f->d_lpb2;
+                    yr = f->d_lpb2 + DL_LEAK * f->d_lpa2;
+                }
+                f->dw = (w + 1u) & mask;
+                if (f->d_fill <= mask)
+                    f->d_fill++;
+                ax = mb_fabsf(yl) + mb_fabsf(yr);
+                if (ax > f->alive)
+                    f->alive = ax;
             }
-            m0 = EXCURSION * 0.5f * (1.0f + f->r_ls);
-            m1 = EXCURSION * 0.5f * (1.0f + f->r_lc);
-            for (j = 0; j < 2u; j++) {           /* the tanks: each fed the other's end */
-                float t = v + dec * f->r_tank_fb[j ^ 1u];
-                t = allpass_f(&f->ap1[j], t, -0.7f, (float)a1[j] + (j ? m1 : m0));
-                line_put(&f->dl1[j], t);
-                t = line_tap(&f->dl1[j], d1[j]);
-                f->r_damp_st[j] += (1.0f - damp) * (t - f->r_damp_st[j]);
-                t = allpass(&f->ap2[j], f->r_damp_st[j] * dec, 0.5f, a2[j]);
-                line_put(&f->dl2[j], t);
-                f->r_tank_fb[j] = line_tap(&f->dl2[j], d2[j]);
+            outL[i] += dd * rm * rl + dm * yl;
+            outR[i] += dd * rm * rr + dm * yr;
+        } else {
+            if (d_on) {
+                float d = f->d_cur += 0.0005f * (target - f->d_cur);   /* (a time turned: glides, as tape) */
+                uint32_t di = (uint32_t)d, w = f->dw;
+                float fr = d - (float)di;
+                int fresh = di + 1u < f->d_fill;   /* (not yet written that far back: silence) */
+                if (!pp) {                        /* the right a little later than the left (the plugin's STEREO) */
+                    uint32_t r0 = (w - di) & mask, r1 = (w - di - 1u) & mask;
+                    float a = fresh ? from16(f->dl[r0]) + fr * (from16(f->dl[r1]) - from16(f->dl[r0])) : 0.0f;
+                    float dr = d * DL_RSTRETCH;
+                    uint32_t dri = (uint32_t)dr, q0 = (w - dri) & mask, q1 = (w - dri - 1u) & mask;
+                    float frr = dr - (float)dri;
+                    float b = dri + 1u < f->d_fill ? from16(f->dl[q0]) + frr * (from16(f->dl[q1]) - from16(f->dl[q0])) : 0.0f;
+                    float h;
+                    f->d_lpa += lpc * (a - f->d_lpa);       /* (two poles: 12 dB an octave, as the plugin's) */
+                    f->d_lpa2 += lpc * (f->d_lpa - f->d_lpa2);
+                    f->d_lpb += lpc * (b - f->d_lpb);
+                    f->d_lpb2 += lpc * (f->d_lpb - f->d_lpb2);
+                    f->d_hpa += hpc * (f->d_lpa2 - f->d_hpa);
+                    h = f->d_lpa2 - f->d_hpa;
+                    f->dl[w & mask] = to16(xd + fb * h);
+                    yl = f->d_lpa2;
+                    yr = f->d_lpb2;
+                } else {                          /* two lines, each feeding the other: L, R, L, ... */
+                    int16_t *A = f->dl, *B = f->dl + half;
+                    uint32_t r0 = (w - di) & mask, r1 = (w - di - 1u) & mask;
+                    float a = fresh ? from16(A[r0]) + fr * (from16(A[r1]) - from16(A[r0])) : 0.0f;
+                    float b = fresh ? from16(B[r0]) + fr * (from16(B[r1]) - from16(B[r0])) : 0.0f;
+                    float ha, hb;
+                    f->d_lpa += lpc * (a - f->d_lpa);
+                    f->d_lpa2 += lpc * (f->d_lpa - f->d_lpa2);
+                    f->d_lpb += lpc * (b - f->d_lpb);
+                    f->d_lpb2 += lpc * (f->d_lpb - f->d_lpb2);
+                    f->d_hpa += hpc * (f->d_lpa2 - f->d_hpa);
+                    f->d_hpb += hpc * (f->d_lpb2 - f->d_hpb);
+                    ha = f->d_lpa2 - f->d_hpa;
+                    hb = f->d_lpb2 - f->d_hpb;
+                    A[w & mask] = to16(xd + fb * hb);   /* (FEEDBACK once a round: each side's repeats fall by it) */
+                    B[w & mask] = to16(ha);
+                    yl = f->d_lpa2 + DL_LEAK * f->d_lpb2;
+                    yr = f->d_lpb2 + DL_LEAK * f->d_lpa2;
+                }
+                f->dw = (w + 1u) & mask;
+                if (f->d_fill <= mask)
+                    f->d_fill++;
+                ax = mb_fabsf(yl) + mb_fabsf(yr);
+                if (ax > f->alive)
+                    f->alive = ax;
             }
-            /* the outputs: Dattorro's taps (scaled to 44.1 kHz and the size) */
-            lo = line_tap(&f->dl1[1], sc(394, k)) + line_tap(&f->dl1[1], sc(4407, k)) -
-                 line_tap(&f->ap2[1], sc(2835, k)) + line_tap(&f->dl2[1], sc(2958, k)) -
-                 line_tap(&f->dl1[0], sc(2949, k)) - line_tap(&f->ap2[0], sc(277, k)) -
-                 line_tap(&f->dl2[0], sc(1580, k));
-            ro = line_tap(&f->dl1[0], sc(523, k)) + line_tap(&f->dl1[0], sc(5375, k)) -
-                 line_tap(&f->ap2[0], sc(1820, k)) + line_tap(&f->dl2[0], sc(3961, k)) -
-                 line_tap(&f->dl1[1], sc(3128, k)) - line_tap(&f->ap2[1], sc(496, k)) -
-                 line_tap(&f->dl2[1], sc(179, k));
-            outL[i] += rm * r_gain * (lo + RV_XC * ro);
-            outR[i] += rm * r_gain * (ro + RV_XC * lo);
-            ax = mb_fabsf(v) + mb_fabsf(f->r_tank_fb[0]) + mb_fabsf(f->r_tank_fb[1]);
-            if (ax > r_alive)
-                r_alive = ax;
+            xr = dd * x + dm * 0.5f * (yl + yr);
+            if (r_on || f->r_run) {
+                float v, lo, ro, m0, m1;
+                line_put(&f->pre, r_on ? xr : 0.0f);
+                v = line_tap(&f->pre, pre);
+                f->r_lp_in += RV_INLP * (v - f->r_lp_in);   /* the input's bandwidth */
+                v = allpass(&f->in_ap[0], f->r_lp_in, 0.75f, IN_AP[0]);
+                v = allpass(&f->in_ap[1], v, 0.75f, IN_AP[1]);
+                v = allpass(&f->in_ap[2], v, 0.625f, IN_AP[2]);
+                v = allpass(&f->in_ap[3], v, 0.625f, IN_AP[3]);
+                {
+                    float c = f->r_lc * lr_c - f->r_ls * lr_s;
+                    f->r_ls = f->r_ls * lr_c + f->r_lc * lr_s;
+                    f->r_lc = c;
+                }
+                m0 = EXCURSION * 0.5f * (1.0f + f->r_ls);
+                m1 = EXCURSION * 0.5f * (1.0f + f->r_lc);
+                for (j = 0; j < 2u; j++) {           /* the tanks: each fed the other's end */
+                    float t = v + dec * f->r_tank_fb[j ^ 1u];
+                    t = allpass_f(&f->ap1[j], t, -0.7f, (float)a1[j] + (j ? m1 : m0));
+                    line_put(&f->dl1[j], t);
+                    t = line_tap(&f->dl1[j], d1[j]);
+                    f->r_damp_st[j] += (1.0f - damp) * (t - f->r_damp_st[j]);
+                    t = allpass(&f->ap2[j], f->r_damp_st[j] * dec, 0.5f, a2[j]);
+                    line_put(&f->dl2[j], t);
+                    f->r_tank_fb[j] = line_tap(&f->dl2[j], d2[j]);
+                }
+                /* the outputs: Dattorro's taps (scaled to 44.1 kHz and the size) */
+                lo = line_tap(&f->dl1[1], sc(394, k)) + line_tap(&f->dl1[1], sc(4407, k)) -
+                     line_tap(&f->ap2[1], sc(2835, k)) + line_tap(&f->dl2[1], sc(2958, k)) -
+                     line_tap(&f->dl1[0], sc(2949, k)) - line_tap(&f->ap2[0], sc(277, k)) -
+                     line_tap(&f->dl2[0], sc(1580, k));
+                ro = line_tap(&f->dl1[0], sc(523, k)) + line_tap(&f->dl1[0], sc(5375, k)) -
+                     line_tap(&f->ap2[0], sc(1820, k)) + line_tap(&f->dl2[0], sc(3961, k)) -
+                     line_tap(&f->dl1[1], sc(3128, k)) - line_tap(&f->ap2[1], sc(496, k)) -
+                     line_tap(&f->dl2[1], sc(179, k));
+                rl = r_gain * (lo + RV_XC * ro);
+                rr = r_gain * (ro + RV_XC * lo);
+                ax = mb_fabsf(v) + mb_fabsf(f->r_tank_fb[0]) + mb_fabsf(f->r_tank_fb[1]);
+                if (ax > r_alive)
+                    r_alive = ax;
+            }
+            outL[i] += rd * dm * yl + rm * rl;
+            outR[i] += rd * dm * yr + rm * rr;
         }
     }
     if (r_on)

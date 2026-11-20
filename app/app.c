@@ -24,12 +24,12 @@
 enum { T_LVL, T_BIP, T_KBD, T_CUT, T_ATT, T_DR, T_LFO, T_PW, T_USR, T_VIB, T_GLIDE, T_DB,
        T_DTIME, T_DTONE, T_RDEC, T_RSIZE, T_RPRE, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
        T_SUBOCT, T_SUBSHP, T_PLAY, T_BEND, T_ONOFF, T_ARP, T_AMODE, T_AOCT, T_ASTEP, T_ASWING, T_HORD,
-       T_LSYNC, T_TEMPO, T_SPAT, T_SLEN, T_DSYNC, T_DMODE };
+       T_LSYNC, T_TEMPO, T_SPAT, T_SLEN, T_DSYNC, T_DMODE, T_FXORD };
 static const uint8_t ENUM_N[] = {[T_MODE] = 4, [T_LWAVE] = 6, [T_VTYPE] = 3, [T_WDEST] = 3, [T_SUBOCT] = 2,
                                  [T_SUBSHP] = 2, [T_PLAY] = 2, [T_BEND] = 12, [T_ONOFF] = 2,
                                  [T_ARP] = 3, [T_AMODE] = 4, [T_AOCT] = 4, [T_ASTEP] = 6, [T_ASWING] = 6, [T_HORD] = 2,
                                  [T_LSYNC] = 2, [T_TEMPO] = 231, [T_SPAT] = 8, [T_SLEN] = 64,
-                                 [T_DSYNC] = 2, [T_DMODE] = 2};
+                                 [T_DSYNC] = 2, [T_DMODE] = 2, [T_FXORD] = 2};
 static const char *const MODE_NAME[] = {"LP", "BP", "HP", "NOTCH"};
 static const char *const LWAVE_NAME[] = {"SINE", "TRI", "SAW", "SQUARE", "S&H", "SMOOTH"};
 static const char *const VTYPE_NAME[] = {"-SQR", "SINE", "+SQR"};
@@ -46,6 +46,7 @@ static const char *const HORD_NAME[] = {"PITCH", "PLAYED"};
 static const char *const LSYNC_NAME[] = {"FREE", "ARP"};
 static const char *const DSYNC_NAME[] = {"FREE", "CLOCK"};
 static const char *const DMODE_NAME[] = {"STEREO", "PING-PONG"};
+static const char *const FXORD_NAME[] = {"DLY>REV", "REV>DLY"};
 
 enum { P_CUT, P_RES, P_BRUTE, P_FENV, P_MODE, P_KBD, P_FVEL, P_AVEL,
        P_SAW, P_SQR, P_TRI, P_SUB, P_NOISE, P_ULTRA, P_PW, P_METAL,
@@ -54,9 +55,10 @@ enum { P_CUT, P_RES, P_BRUTE, P_FENV, P_MODE, P_KBD, P_FVEL, P_AVEL,
        P_GLIDE, P_VINT, P_WDEST, P_WAMT, P_SUBOCT, P_SUBSHP, P_USRATE, P_LEVEL,
        P_ATVIB, P_ATCUT, P_PWENV, P_MTENV, P_PLAY, P_BEND, P_LRTRG,
        P_ARP, P_AMODE, P_AOCT, P_ASTEP, P_ASWING,
-       P_DTIME, P_DFB, P_DTONE, P_DMIX, P_DSYNC, P_DMODE, P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX, P_RPRE, NP };
+       P_DTIME, P_DFB, P_DTONE, P_DMIX, P_DSYNC, P_DMODE, P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX, P_RPRE, P_FXORD, NP };
 #define NP_08 47u                        /* 0.8's patches: no arpeggiator, no effects (the loader takes them still) */
 #define NP_09 52u                        /* 0.8.2 .. 0.9's: no effects */
+#define NP_10 63u                        /* 0.10's: no FX ORDER */
 #define P_NONE 0xFFu                     /* an empty place on a page */
 /* the instrument's settings (not a patch's): the tempo, the Hold order, the LFO's clock, and the sequencer's
  * pattern, length, step and swing; numbered after the patch's parameters. (The arpeggiator's Off/On/Hold, Mode,
@@ -93,7 +95,7 @@ static const param_t PARAM[NP] = {
     [P_DTIME] = {"TIME", T_DTIME, 110},   [P_DFB] = {"FEEDBACK", T_LVL, 111}, [P_DTONE] = {"TONE", T_DTONE, 112},
     [P_DMIX] = {"MIX", T_LVL, 113},       [P_DSYNC] = {"DLY SYNC", T_DSYNC, 114}, [P_DMODE] = {"DLY MODE", T_DMODE, 115},
     [P_RDECAY] = {"DECAY", T_RDEC, 116},  [P_RSIZE] = {"SIZE", T_RSIZE, 117}, [P_RDAMP] = {"DAMP", T_LVL, 118},
-    [P_RMIX] = {"MIX", T_LVL, 119},       [P_RPRE] = {"PRE-DLY", T_RPRE, 14},
+    [P_RMIX] = {"MIX", T_LVL, 119},       [P_RPRE] = {"PRE-DLY", T_RPRE, 14},  [P_FXORD] = {"FX ORDER", T_FXORD, 15},
 };
 
 static const param_t GPARAM[NG] = {
@@ -124,7 +126,7 @@ static const page_t PAGE[] = {
     {"VOICE", B_GLO, {P_PLAY, P_BEND, P_LRTRG, P_NONE}},
     {"TOUCH", B_FX, {P_ATVIB, P_ATCUT, P_PWENV, P_MTENV}},
     {"DELAY", B_FX, {P_DTIME, P_DFB, P_DTONE, P_DMIX}},      {"REVERB", B_FX, {P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX}},
-    {"FX 2", B_FX, {P_DSYNC, P_DMODE, P_RPRE, P_NONE}},
+    {"FX 2", B_FX, {P_DSYNC, P_DMODE, P_RPRE, P_FXORD}},
     {"ARP", B_ARP, {P_AMODE, P_AOCT, P_ASTEP, P_ASWING}},   {"ARP 2", B_ARP, {G_TEMPO, P_ARP, G_HORD, G_LSYNC}},
     {"SEQ", B_SEQ, {G_SPAT, G_SLEN, G_SSTEP, G_SSWING}},
 };
@@ -146,7 +148,7 @@ static const uint8_t INIT_V[NP] = {
     [P_SUBOCT] = 0, [P_SUBSHP] = 0, [P_USRATE] = 31, [P_LEVEL] = 60, [P_PWENV] = 64, [P_MTENV] = 64,
     [P_PLAY] = 0, [P_BEND] = 1, [P_LRTRG] = 0, [P_ARP] = 0, [P_AMODE] = 0, [P_AOCT] = 0, [P_ASTEP] = 1,
     [P_ASWING] = 0, [P_DTIME] = 77, [P_DFB] = 51, [P_DTONE] = 95, [P_DMIX] = 0, [P_DSYNC] = 0, [P_DMODE] = 0,
-    [P_RDECAY] = 64, [P_RSIZE] = 64, [P_RDAMP] = 64, [P_RMIX] = 0, [P_RPRE] = 0,
+    [P_RDECAY] = 64, [P_RSIZE] = 64, [P_RDAMP] = 64, [P_RMIX] = 0, [P_RPRE] = 0, [P_FXORD] = 0,
 };
 /* the factory sounds: changes from INIT (parameter, value; 0xFF ends) */
 static const struct {
@@ -190,7 +192,7 @@ static void patch_factory(patch_t *p, uint32_t slot)
         p->v[FACTORY[slot].d[i]] = FACTORY[slot].d[i + 1u];
 }
 
-#define BANK_MAGIC 0x4D423146u           /* "MB1F": 63 parameters, the effects' too ("MB1E": 0.8.2 .. 0.9's 52,
+#define BANK_MAGIC 0x4D423147u           /* "MB1G": 64 parameters, FX ORDER too ("MB1F": 0.10's 63, "MB1E": 0.8.2 .. 0.9's 52,
                                          * "MB1D": 0.3 .. 0.8's 47, "MB1C": 0.2's 44, "MB1B": 0.1's 16 slots) */
 typedef struct {
     uint32_t magic;
@@ -370,6 +372,7 @@ static void fx_params_from(const uint8_t *v, MBFxParams *f, float *beats)
     f->r_damp = lvl(v[P_RDAMP]);
     f->r_mix = lvl(v[P_RMIX]);
     f->r_pre_s = rpre_s(v[P_RPRE]);
+    f->order = v[P_FXORD];
     *beats = v[P_DSYNC] ? DSYNC_BEATS[dsync_ix(v[P_DTIME])] : 0.0f;
 }
 
@@ -954,7 +957,7 @@ static uint8_t arp_posted;                   /* the arpeggiator's state the audi
 
 static int bank_migrate(void)                /* an older bank (47 or 52 parameters a patch): the rest as INIT */
 {
-    static const struct { uint32_t magic, np; } OLD[] = {{0x4D423144u, NP_08}, {0x4D423145u, NP_09}};
+    static const struct { uint32_t magic, np; } OLD[] = {{0x4D423144u, NP_08}, {0x4D423145u, NP_09}, {0x4D423146u, NP_10}};
     uint32_t k, i, j, size = (uint32_t)plat_store_size(OBJ_BANK);
     for (k = 0; k < sizeof OLD / sizeof OLD[0]; k++) {
         uint32_t so = 8u + OLD[k].np;
@@ -1024,7 +1027,7 @@ void app_init(void)
 /* ------------------------------------------------------------ the loader --- */
 /* patches over USB SysEx: F0 7D 4D 42 CMD ... F7 (7D: non-commercial; "MB")
  *   01 SLOT NAME[8] V[NP]   a patch into a slot (SLOT 0..31; NAME ASCII; V: each parameter 0..127, PARAM's order:
- *                           63; 0.8's 47 and 0.9's 52 taken, the rest as INIT);
+ *                           64; 0.8's 47, 0.9's 52 and 0.10's 63 taken, the rest as INIT);
  *                           kept in RAM until 02. The slot playing: played at once
  *   02                      the slots stored in the flash
  *   03                      the factory slots back (stored)
@@ -1055,7 +1058,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
     if (n < 4u || p[0] != 0x7Du || p[1] != 0x4Du || p[2] != 0x42u)
         return 0;
     cmd = p[3];
-    if (cmd == 1u && (n == 13u + NP || n == 13u + NP_08 || n == 13u + NP_09) && p[4] < NSLOT) {
+    if (cmd == 1u && (n == 13u + NP || n == 13u + NP_08 || n == 13u + NP_09 || n == 13u + NP_10) && p[4] < NSLOT) {
         patch_t *d = &bank.slot[p[4]];
         uint32_t nv = n - 13u;               /* (an older loader's 47 or 52: the rest as INIT) */
         for (i = 0; i < 8u; i++)
@@ -1310,6 +1313,9 @@ static void value_text(uint32_t i, uint32_t x, char *b)
         break;
     case T_DMODE:
         text_cat(b, DMODE_NAME[x & 1u]);
+        break;
+    case T_FXORD:
+        text_cat(b, FXORD_NAME[x & 1u]);
         break;
     }
 }

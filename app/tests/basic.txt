@@ -679,3 +679,23 @@ turn K2 1
 wait 30
 shot fx2pp.png
 turn K2 -1
+# FX ORDER (FX 2, K4): REV>DLY, both on: heard
+turn K4 1
+wait 30
+expect p63 1
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 12
+turn K4 64
+wait 30
+tap FX
+wait 30
+turn K4 64
+wait 30
+key 7 down
+wait 100
+key 7 up
+wait 700
+expect fxpeak >5
