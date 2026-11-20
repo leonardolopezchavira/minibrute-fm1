@@ -12,6 +12,7 @@
 #ifdef MB_MEASURED_METAL
 #include "metal_tables.h"            /* measured from the plugin: private builds only, not in this repository */
 #endif
+#include "metal_stage.h"             /* one folding stage, computed from the circuit */
 /* ---- measured calibration (see mbcal.h; values fitted by engine/calibrate.py) ---- */
 MBCal mb_cal = {
     .out_ref = 0.462925f,
@@ -31,7 +32,7 @@ MBCal mb_cal = {
     .us_rate_mult = 1.045f,
     .us_main = 0.888889f,
     .us_phase0 = 0.85f,
-    .metal_gain = 12.0f,
+    .metal_gain = 12.0f,                /* (0.4 and before: the stand-in folder) */
     .metal_lower_start = 0.74f,
     .kt_ref = 24.0f,
     .fenv_oct = 18.8f,
@@ -89,6 +90,12 @@ MBCal mb_cal = {
     .us_shape = 0.948624f,
     .us_gain = 2.16012f,
     .us_phase1 = 0.0f,
+    .mt_g0 = 0.357127f,
+    .mt_g1 = 0.423589f,
+    .mt_pw = 1.06616f,
+    .mt_a0 = 2.71306f,
+    .mt_d = 1.58136f,
+    .mt_norm = 0.5f,
 };
 #define C mb_cal
 /* ---- helpers ----------------------------------------------------------------------- */
@@ -139,22 +146,6 @@ static float filter_freq(float knob_eff, float res) {
     return f * (1.f - s) + sat * s;
 }
 
-/* Metalizer, the parametric model (this repository's): a one-sided sine folder on the triangle, the lower half
- * joining in above metal_lower_start. A private build may define MB_MEASURED_METAL for the measured cycles instead. */
-static float metalize(float x, float m) {
-    if (m <= 0.f) return x;
-    float c = clampf(m * 8.f, 0.f, 1.f);
-    if (x > 0.f) {
-        float g = 1.f + C.metal_gain * m;
-        return x + c * (mb_sinf(0.5f * PI * g * x) - x);
-    } else if (m > C.metal_lower_start) {
-        float m2 = (m - C.metal_lower_start) / (1.f - C.metal_lower_start), g = 1.f + C.metal_gain * m2;
-        float c2 = clampf(m2 * 4.f, 0.f, 1.f);
-        return x + c2 * (mb_sinf(0.5f * PI * g * x) - x);
-    }
-    return x;
-}
-
 #ifdef MB_MEASURED_METAL
 /* Metalizer: measured single cycles, interpolated across the 9 settings, band-limited by pitch */
 static float metal_wave(float ph, float m, float f0, float sr) {
@@ -168,12 +159,24 @@ static float metal_wave(float ph, float m, float f0, float sr) {
 }
 
 #else
+static inline float fold_stage(float x) {      /* one folding stage (metal_stage.h), interpolated */
+    float f = (x - MS_LO) * (1.f / MS_STEP);
+    int i;
+    if (f <= 0.f) return MS_TAB[0];
+    if (f >= (float)(MS_N - 1)) return MS_TAB[MS_N - 1];
+    i = (int)f;
+    return MS_TAB[i] + (MS_TAB[i + 1] - MS_TAB[i]) * (f - (float)i);
+}
 static float metal_wave(float ph, float m, float f0, float sr) {
     /* the folds' harmonics alias at 44.1 kHz on high notes: the folding fades out from 2 kHz to 6 kHz */
-    float fade = clampf((6000.f - f0) * (1.f / 4000.f), 0.f, 1.f), tri;
+    float fade = clampf((6000.f - f0) * (1.f / 4000.f), 0.f, 1.f), tri, a, g, y;
     (void)sr;
     tri = tri_skewed(ph, C.tri_skew);
-    return metalize(tri, m * fade);
+    if (m <= 0.f || fade <= 0.f) return tri;
+    g = C.mt_g0 + C.mt_g1 * mb_powf(m, C.mt_pw);
+    a = C.mt_a0 * clampf(m * 10.f, 0.f, 1.f) * fade;    /* (the knob's second gang brings the folds in) */
+    y = fold_stage(fold_stage(fold_stage(fold_stage(g * tri + C.mt_d))));
+    return (tri + a * y * (1.f / 10.8f)) / (1.f + C.mt_norm * m);
 }
 #endif
 

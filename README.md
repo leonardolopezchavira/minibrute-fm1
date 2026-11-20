@@ -28,8 +28,9 @@ Every push to `main` builds the firmware on GitHub Actions (zvenson/fm1-build) a
 
 ## About the measurements
 
-The engine's calibration (`app/mbvoice/mbcal.h`) was fitted to renders of the MiniBrute V plugin. The Metalizer in
-this repository is a parametric folder of its own; the measured single cycles used during development are not
+The engine's calibration (`app/mbvoice/mbcal.h`) was fitted to renders of the MiniBrute V plugin. The Metalizer is
+modelled from the circuit: one folding stage computed from its transistors and resistors (`app/mbvoice/metal_stage.h`),
+four in a row, its gain and offset fitted to the plugin. The measured single cycles used during development are not
 published (`MB_MEASURED_METAL`, private builds only).
 
 ## Licence
