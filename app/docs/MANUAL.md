@@ -22,8 +22,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | PRESET | The patch slot, 1..32. Turning it loads the slot (unsaved changes are dropped) |
 | SAVE | Stores the patch in its slot, and the settings (lit when there is something to save) |
 | OCT- / OCT+ | The keyboard's octave, -2..+2 |
-| ARP | The arpeggiator: OFF, ON, HOLD in turn (and its page). Lit while it runs, dark a moment on each beat |
-| SEQ | The arpeggiator's second page |
+| ARP | The arpeggiator: OFF, ON, HOLD in turn (and its page). Held half a second: its pages, ARP and ARP 2. Lit while it runs, dark a moment on each beat |
 | PLAY | Tap tempo: tap it on the beat |
 | The keys | Notes with velocity; pressing harder is aftertouch |
 
@@ -44,7 +43,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | VOICE | GLO | PLAY | BEND | LFO RTRG |  |
 | TOUCH | FX | AT VIB | AT CUT | PW ENV | MTL ENV |
 | ARP | ARP | MODE | OCTAVE | STEP | SWING |
-| ARP 2 | SEQ | TEMPO | ARP | HOLD ORD | LFO CLK |
+| ARP 2 | ARP (held) | TEMPO | ARP | HOLD ORD | LFO CLK |
 
 Notes on a few of them:
 
@@ -80,8 +79,9 @@ After the Minibrute's. ARP steps through OFF, ON and HOLD:
 - **LFO CLK** (ARP 2): ARP puts the LFO on the arpeggiator's tempo; LFO RATE then picks a note value (8 bars
   dotted .. a 64th triplet), as the plugin's synced LFO.
 
-Each note sounds for half its step. The arpeggiator's settings belong to the instrument, not the patch: SAVE keeps
-them; at power-on it starts OFF.
+Each note sounds for half its step. As in the plugin, the arpeggiator is the patch's: ARP (OFF, ON or HOLD), MODE,
+OCTAVE, STEP and SWING are saved with it, so picking a patch can switch the arpeggiator on. TEMPO, HOLD ORD and
+LFO CLK belong to the instrument (one tempo for every patch).
 
 ## The patches
 
@@ -150,6 +150,11 @@ sent out over USB and Bluetooth.
 | 102 | PLAY | VOICE |
 | 103 | BEND | VOICE |
 | 104 | LFO RTRG | VOICE |
+| 105 | ARP (off, on, hold) | ARP 2 |
+| 106 | MODE | ARP |
+| 107 | OCTAVE | ARP |
+| 108 | STEP | ARP |
+| 109 | SWING | ARP |
 | 97 | AT VIB | TOUCH |
 | 98 | AT CUT | TOUCH |
 | 99 | PW ENV | TOUCH |

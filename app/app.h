@@ -12,9 +12,9 @@
 int app_sysex(const uint8_t *p, uint32_t n);
 
 /* the store: the settings (with the patch being played), the panel calibration and Bluetooth's (the platform's),
- * and the 16 patch slots (in the data area, its first sector) */
-enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_BLE, OBJ_BANK, OBJ_NOBJ };
-#define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xDE000u, 0x97000u}
+ * the 32 patch slots and the 8 sequences (in the data area) */
+enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_BLE, OBJ_BANK, OBJ_SEQ, OBJ_NOBJ };
+#define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xDE000u, 0x97000u, 0x99000u}   /* (the sequences: the data area's 3rd and 4th sectors) */
 
 void app_init(void);
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12);

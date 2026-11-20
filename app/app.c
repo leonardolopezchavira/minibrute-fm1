@@ -17,15 +17,18 @@
 #include "mb_tapers.h"
 
 #define C_ACCENT RGB(240, 96, 40)       /* the highlight: Minibrute orange */
+#ifndef MB_SEQ
+#define MB_SEQ 0                         /* the step sequencer (0.9: in the making) */
+#endif
 
 /* ------------------------------------------------------------- parameters --- */
 enum { T_LVL, T_BIP, T_KBD, T_CUT, T_ATT, T_DR, T_LFO, T_PW, T_USR, T_VIB, T_GLIDE, T_DB, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
        T_SUBOCT, T_SUBSHP, T_PLAY, T_BEND, T_ONOFF, T_ARP, T_AMODE, T_AOCT, T_ASTEP, T_ASWING, T_HORD,
-       T_LSYNC, T_TEMPO };
+       T_LSYNC, T_TEMPO, T_SPAT, T_SLEN };
 static const uint8_t ENUM_N[] = {[T_MODE] = 4, [T_LWAVE] = 6, [T_VTYPE] = 3, [T_WDEST] = 3, [T_SUBOCT] = 2,
                                  [T_SUBSHP] = 2, [T_PLAY] = 2, [T_BEND] = 12, [T_ONOFF] = 2,
                                  [T_ARP] = 3, [T_AMODE] = 4, [T_AOCT] = 4, [T_ASTEP] = 6, [T_ASWING] = 6, [T_HORD] = 2,
-                                 [T_LSYNC] = 2, [T_TEMPO] = 231};
+                                 [T_LSYNC] = 2, [T_TEMPO] = 231, [T_SPAT] = 8, [T_SLEN] = 64};
 static const char *const MODE_NAME[] = {"LP", "BP", "HP", "NOTCH"};
 static const char *const LWAVE_NAME[] = {"SINE", "TRI", "SAW", "SQUARE", "S&H", "SMOOTH"};
 static const char *const VTYPE_NAME[] = {"-SQR", "SINE", "+SQR"};
@@ -46,11 +49,14 @@ enum { P_CUT, P_RES, P_BRUTE, P_FENV, P_MODE, P_KBD, P_FVEL, P_AVEL,
        P_FA, P_FD, P_FS, P_FR, P_AA, P_AD, P_AS, P_AR,
        P_LRATE, P_LWAVE, P_LPITCH, P_LFILT, P_LPWM, P_LAMP, P_VRATE, P_VTYPE,
        P_GLIDE, P_VINT, P_WDEST, P_WAMT, P_SUBOCT, P_SUBSHP, P_USRATE, P_LEVEL,
-       P_ATVIB, P_ATCUT, P_PWENV, P_MTENV, P_PLAY, P_BEND, P_LRTRG, NP };
+       P_ATVIB, P_ATCUT, P_PWENV, P_MTENV, P_PLAY, P_BEND, P_LRTRG,
+       P_ARP, P_AMODE, P_AOCT, P_ASTEP, P_ASWING, NP };
+#define NP_OLD 47u                       /* 0.8's patches: no arpeggiator (the loader takes them still) */
 #define P_NONE 0xFFu                     /* an empty place on a page */
-/* the instrument's settings (not a patch's): the arpeggiator, after the Minibrute's (Off/On/Hold, Octave, Mode,
- * Step, Swing, Tempo), the Hold order, and the LFO's clock; numbered after the patch's parameters */
-enum { G_ARP = NP, G_AMODE, G_AOCT, G_ASTEP, G_ASWING, G_TEMPO, G_HORD, G_LSYNC, G_END };
+/* the instrument's settings (not a patch's): the tempo, the Hold order, the LFO's clock, and the sequencer's
+ * pattern, length, step and swing; numbered after the patch's parameters. (The arpeggiator's Off/On/Hold, Mode,
+ * Octave, Step and Swing are the patch's, as in the plugin.) */
+enum { G_TEMPO = NP, G_HORD, G_LSYNC, G_SPAT, G_SLEN, G_SSTEP, G_SSWING, G_END };
 #define NG (G_END - NP)
 
 typedef struct {
@@ -77,20 +83,22 @@ static const param_t PARAM[NP] = {
     [P_ATVIB] = {"AT VIB", T_LVL, 97}, [P_ATCUT] = {"AT CUT", T_LVL, 98}, [P_PWENV] = {"PW ENV", T_BIP, 99},
     [P_MTENV] = {"MTL ENV", T_BIP, 100},
     [P_PLAY] = {"PLAY", T_PLAY, 102},   [P_BEND] = {"BEND", T_BEND, 103},  [P_LRTRG] = {"LFO RTRG", T_ONOFF, 104},
+    [P_ARP] = {"ARP", T_ARP, 105},      [P_AMODE] = {"MODE", T_AMODE, 106}, [P_AOCT] = {"OCTAVE", T_AOCT, 107},
+    [P_ASTEP] = {"STEP", T_ASTEP, 108}, [P_ASWING] = {"SWING", T_ASWING, 109},
 };
 
 static const param_t GPARAM[NG] = {
-    [G_ARP - NP] = {"ARP", T_ARP, 0},          [G_AMODE - NP] = {"MODE", T_AMODE, 0},
-    [G_AOCT - NP] = {"OCTAVE", T_AOCT, 0},     [G_ASTEP - NP] = {"STEP", T_ASTEP, 0},
-    [G_ASWING - NP] = {"SWING", T_ASWING, 0},  [G_TEMPO - NP] = {"TEMPO", T_TEMPO, 0},
+    [G_SSTEP - NP] = {"STEP", T_ASTEP, 0},     [G_SSWING - NP] = {"SWING", T_ASWING, 0},
+    [G_TEMPO - NP] = {"TEMPO", T_TEMPO, 0},
     [G_HORD - NP] = {"HOLD ORD", T_HORD, 0},   [G_LSYNC - NP] = {"LFO CLK", T_LSYNC, 0},
+    [G_SPAT - NP] = {"PATTERN", T_SPAT, 0},    [G_SLEN - NP] = {"LENGTH", T_SLEN, 0},
 };
 static const param_t *pinfo(uint32_t i) { return i < NP ? &PARAM[i] : &GPARAM[(i - NP) % NG]; }
-static int is_enum(uint32_t t) { return t >= T_MODE && t != T_TEMPO; }
+static int is_enum(uint32_t t) { return t >= T_MODE && t != T_TEMPO && t != T_SLEN; }
 static uint32_t pmax(uint32_t i)
 {
     uint32_t t = pinfo(i)->type;
-    return t == T_TEMPO ? 230u : is_enum(t) ? ENUM_N[t] - 1u : 127u;
+    return t == T_TEMPO ? 230u : t == T_SLEN ? 63u : is_enum(t) ? ENUM_N[t] - 1u : 127u;
 }
 
 /* the pages: four parameters each, and the button that shows them (a second press: its second page) */
@@ -106,7 +114,10 @@ static const page_t PAGE[] = {
     {"PERFORM", B_EDIT, {P_GLIDE, P_VINT, P_WDEST, P_WAMT}}, {"MORE", B_GLO, {P_SUBOCT, P_SUBSHP, P_USRATE, P_LEVEL}},
     {"VOICE", B_GLO, {P_PLAY, P_BEND, P_LRTRG, P_NONE}},
     {"TOUCH", B_FX, {P_ATVIB, P_ATCUT, P_PWENV, P_MTENV}},
-    {"ARP", B_ARP, {G_AMODE, G_AOCT, G_ASTEP, G_ASWING}},   {"ARP 2", B_SEQ, {G_TEMPO, G_ARP, G_HORD, G_LSYNC}},
+    {"ARP", B_ARP, {P_AMODE, P_AOCT, P_ASTEP, P_ASWING}},   {"ARP 2", B_ARP, {G_TEMPO, P_ARP, G_HORD, G_LSYNC}},
+#if MB_SEQ
+    {"SEQ", B_SEQ, {G_SPAT, G_SLEN, G_SSTEP, G_SSWING}},
+#endif
 };
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
 
@@ -124,7 +135,8 @@ static const uint8_t INIT_V[NP] = {
     [P_AS] = 127, [P_AR] = 5, [P_LRATE] = 51, [P_LWAVE] = 0, [P_LPITCH] = 64, [P_LFILT] = 64, [P_LPWM] = 64,
     [P_LAMP] = 64, [P_VRATE] = 57, [P_VTYPE] = 1, [P_GLIDE] = 0, [P_VINT] = 0, [P_WDEST] = 1, [P_WAMT] = 61,
     [P_SUBOCT] = 0, [P_SUBSHP] = 0, [P_USRATE] = 31, [P_LEVEL] = 60, [P_PWENV] = 64, [P_MTENV] = 64,
-    [P_PLAY] = 0, [P_BEND] = 1, [P_LRTRG] = 0,
+    [P_PLAY] = 0, [P_BEND] = 1, [P_LRTRG] = 0, [P_ARP] = 0, [P_AMODE] = 0, [P_AOCT] = 0, [P_ASTEP] = 1,
+    [P_ASWING] = 0,
 };
 /* the factory sounds: changes from INIT (parameter, value; 0xFF ends) */
 static const struct {
@@ -168,14 +180,16 @@ static void patch_factory(patch_t *p, uint32_t slot)
         p->v[FACTORY[slot].d[i]] = FACTORY[slot].d[i + 1u];
 }
 
-#define BANK_MAGIC 0x4D423144u           /* "MB1D": 47 parameters ("MB1C": 0.2's 44, "MB1B": 0.1's 16 slots) */
+#define BANK_MAGIC 0x4D423145u           /* "MB1E": 52 parameters, the arpeggiator's too ("MB1D": 0.3 .. 0.8's 47,
+                                         * "MB1C": 0.2's 44, "MB1B": 0.1's 16 slots) */
+#define BANK_MAGIC_OLD 0x4D423144u
 typedef struct {
     uint32_t magic;
     patch_t slot[NSLOT];
 } bank_t;
 static bank_t bank;
 
-#define SET_MAGIC 0x4D423155u            /* "MB1U": with the arpeggiator ("MB1T": 0.3 .. 0.7, "MB1S": 0.1 .. 0.2) */
+#define SET_MAGIC 0x4D423156u            /* "MB1V": 0.9 ("MB1U": 0.8, "MB1T": 0.3 .. 0.7, "MB1S": 0.1 .. 0.2) */
 typedef struct {
     uint32_t magic;
     int8_t octave;                       /* -2 .. +2 */
@@ -187,9 +201,32 @@ typedef struct {
 } settings_t;
 static settings_t set;
 static uint8_t set_dirty;
-static uint32_t pget(uint32_t i) { return i < NP ? set.cur.v[i] : set.g[(i - NP) % NG]; }
-static const uint8_t G_DEF[NG] = {[G_ARP - NP] = 0, [G_AMODE - NP] = 0, [G_AOCT - NP] = 0, [G_ASTEP - NP] = 1,
-                                  [G_ASWING - NP] = 0, [G_TEMPO - NP] = 90, [G_HORD - NP] = 0, [G_LSYNC - NP] = 0};
+/* ------------------------------------------------------------ the sequences --- */
+/* 8 patterns of up to 64 steps (after the KeyStep's sequencer, as on the MiniBrute 2): each step a note and its
+ * velocity, a rest (velocity 0), or a tie (the note before goes on through it) */
+#define SEQ_MAGIC 0x4D425351u            /* "MBSQ" */
+#define NPAT 8u
+#define NSTEP 64u
+enum { SF_TIE = 1 };
+typedef struct {
+    uint8_t len, rsv[3];                 /* 1..64 */
+    uint8_t note[NSTEP], vel[NSTEP], flag[NSTEP];
+} seqpat_t;
+typedef struct {
+    uint32_t magic;
+    seqpat_t pat[NPAT];
+} seqbank_t;
+static seqbank_t sq;
+static uint8_t sq_dirty;                 /* changed since stored */
+
+static uint32_t pget(uint32_t i)
+{
+    if (i == G_SLEN)
+        return sq.pat[set.g[G_SPAT - NP] % NPAT].len - 1u;
+    return i < NP ? set.cur.v[i] : set.g[(i - NP) % NG];
+}
+static const uint8_t G_DEF[NG] = {[G_TEMPO - NP] = 90, [G_HORD - NP] = 0, [G_LSYNC - NP] = 0, [G_SPAT - NP] = 0,
+                                  [G_SLEN - NP] = 0, [G_SSTEP - NP] = 2, [G_SSWING - NP] = 0};
 
 /* ---------------------------------------------------------------- mapping --- */
 static float lvl(uint32_t x) { return (float)x * (1.0f / 127.0f); }
@@ -317,7 +354,7 @@ static volatile uint8_t bend_range = 2;     /* semitones (the patch's BEND) */
 static struct {
     uint8_t pool[ARP_MAX], vel[ARP_MAX], n;  /* the notes it plays */
     uint8_t held;                            /* keys down now (HOLD: a key with none down starts a new chord) */
-    uint8_t state;                           /* G_ARP as the audio side last saw it */
+    uint8_t state;                           /* P_ARP as the audio side last saw it */
     uint32_t due;                            /* samples to the next event */
     uint8_t gate;                            /* 1: a note sounds (its end is the next event) */
     int32_t sounding;                        /* that note */
@@ -337,11 +374,12 @@ static float arp_tempo_now(void)             /* BPM: MIDI clock while it comes, 
     return 30.0f + (float)t;
 }
 
-static uint32_t arp_step_len(uint32_t k)    /* step k's length in samples (swing: the second of a pair later) */
+static uint32_t step_len(uint32_t k, uint32_t step, uint32_t swing)   /* step k's length in samples (swing: the
+                                                                     * second of a pair later) */
 {
     static const float BEATS[6] = {1.0f, 0.5f, 0.25f, 2.0f / 3.0f, 1.0f / 3.0f, 1.0f / 6.0f};
-    float len = 44100.0f * 60.0f / arp_tempo_now() * BEATS[set.g[G_ASTEP - NP] % 6u];
-    float sw = 0.5f + 0.05f * (float)(set.g[G_ASWING - NP] % 6u);
+    float len = 44100.0f * 60.0f / arp_tempo_now() * BEATS[step % 6u];
+    float sw = 0.5f + 0.05f * (float)(swing % 6u);
     len *= 2.0f * ((k & 1u) ? 1.0f - sw : sw);
     return len < 64.0f ? 64u : (uint32_t)len;
 }
@@ -422,7 +460,7 @@ static void arp_key(uint32_t note, uint32_t vel)   /* a key or a MIDI note into 
 
 static void arp_event(void)                  /* the next note's start, or the sounding note's end */
 {
-    uint32_t len = arp_step_len(arp.pos);
+    uint32_t len = step_len(arp.pos, set.cur.v[P_ASTEP], set.cur.v[P_ASWING]);
     if (arp.gate) {                          /* the note's end; the rest of the step */
         arp_sound(-1, 0);
         arp.gate = 0;
@@ -435,8 +473,8 @@ static void arp_event(void)                  /* the next note's start, or the so
         return;
     }
     {
-        uint32_t oct = set.g[G_AOCT - NP] % 4u + 1u, L = arp.n * oct, i = arp.pos % (L * 2u), k;
-        switch (set.g[G_AMODE - NP] % 4u) {
+        uint32_t oct = set.cur.v[P_AOCT] % 4u + 1u, L = arp.n * oct, i = arp.pos % (L * 2u), k;
+        switch (set.cur.v[P_AMODE] % 4u) {
         case 1: k = L - 1u - arp.pos % L; break;                       /* down */
         case 2: k = i < L ? i : 2u * L - 1u - i; break;              /* up and down: the ends twice */
         case 3: arp.rng = arp.rng * 1664525u + 1013904223u; k = (arp.rng >> 8) % L; break;
@@ -681,10 +719,33 @@ static void settings_defaults(void)
         set.g[i] = G_DEF[i];
 }
 
+static uint8_t arp_posted;                   /* the arpeggiator's state the audio side was told */
+
+static int bank_migrate(void)                /* 0.8's bank (47 parameters a patch): the arpeggiator off added */
+{
+    typedef struct { char name[8]; uint8_t v[NP_OLD]; } old_t;
+    const uint32_t old_size = 4u + NSLOT * (uint32_t)sizeof(old_t);
+    uint32_t i, j;
+    if (old_size > sizeof bank || plat_store_size(OBJ_BANK) != (int)old_size ||
+        plat_store_load(OBJ_BANK, &bank, sizeof bank) != (int)old_size || bank.magic != BANK_MAGIC_OLD)
+        return 0;
+    for (i = NSLOT; i-- > 0u;) {             /* (from the last: each new patch is longer than its old one) */
+        const old_t *op = (const old_t *)(const void *)((const uint8_t *)bank.slot + i * sizeof(old_t));
+        old_t o = *op;
+        for (j = 0; j < 8u; j++)
+            bank.slot[i].name[j] = o.name[j];
+        for (j = 0; j < NP; j++)
+            bank.slot[i].v[j] = j < NP_OLD ? o.v[j] : INIT_V[j];
+    }
+    bank.magic = BANK_MAGIC;
+    return 1;
+}
+
 void app_init(void)
 {
     uint32_t i, j;
-    if (plat_store_load(OBJ_BANK, &bank, sizeof bank) != (int)sizeof bank || bank.magic != BANK_MAGIC) {
+    if ((plat_store_load(OBJ_BANK, &bank, sizeof bank) != (int)sizeof bank || bank.magic != BANK_MAGIC) &&
+        !bank_migrate()) {
         bank.magic = BANK_MAGIC;
         for (i = 0; i < NSLOT; i++)
             patch_factory(&bank.slot[i], i);
@@ -702,7 +763,7 @@ void app_init(void)
     for (j = 0; j < NG; j++)
         if (set.g[j] > pmax(NP + j))
             set.g[j] = G_DEF[j];
-    set.g[G_ARP - NP] = 0;                   /* (it starts off: the keys play notes at power-on) */
+    arp.state = arp_posted = set.cur.v[P_ARP];   /* (as the patch has it) */
     params_from(set.cur.v, &voice.p);
     mb_init(&voice, 44100.0f);
     params_post();
@@ -711,7 +772,8 @@ void app_init(void)
 
 /* ------------------------------------------------------------ the loader --- */
 /* patches over USB SysEx: F0 7D 4D 42 CMD ... F7 (7D: non-commercial; "MB")
- *   01 SLOT NAME[8] V[NP]   a patch into a slot (SLOT 0..31; NAME ASCII; V: each parameter 0..127, PARAM's order);
+ *   01 SLOT NAME[8] V[NP]   a patch into a slot (SLOT 0..31; NAME ASCII; V: each parameter 0..127, PARAM's order:
+ *                           52; 0.8's 47 taken, the arpeggiator off);
  *                           kept in RAM until 02. The slot playing: played at once
  *   02                      the slots stored in the flash
  *   03                      the factory slots back (stored)
@@ -742,12 +804,13 @@ int app_sysex(const uint8_t *p, uint32_t n)
     if (n < 4u || p[0] != 0x7Du || p[1] != 0x4Du || p[2] != 0x42u)
         return 0;
     cmd = p[3];
-    if (cmd == 1u && n == 5u + 8u + NP && p[4] < NSLOT) {
+    if (cmd == 1u && (n == 5u + 8u + NP || n == 5u + 8u + NP_OLD) && p[4] < NSLOT) {
         patch_t *d = &bank.slot[p[4]];
+        uint32_t nv = n - 13u;               /* (0.8's 47: the arpeggiator off) */
         for (i = 0; i < 8u; i++)
             d->name[i] = p[5u + i] >= 32u && p[5u + i] < 127u ? (char)p[5u + i] : ' ';
         for (i = 0; i < NP; i++)
-            d->v[i] = (uint8_t)(p[13u + i] > pmax(i) ? pmax(i) : p[13u + i]);
+            d->v[i] = i >= nv ? INIT_V[i] : (uint8_t)(p[13u + i] > pmax(i) ? pmax(i) : p[13u + i]);
         bank_loaded = 1;
         if (p[4] == set.slot)
             slot_load(set.slot);
@@ -910,6 +973,13 @@ static void value_text(uint32_t i, uint32_t x, char *b)
         int_text(30 + (int32_t)x, b);
         text_cat(b, " BPM");
         break;
+    case T_SPAT:
+        int_text((int32_t)x + 1, b);
+        break;
+    case T_SLEN:
+        int_text((int32_t)x + 1, b);
+        text_cat(b, " STEPS");
+        break;
     case T_USR:
         hz_text(usr_hz(x), b);
         break;
@@ -1023,11 +1093,15 @@ static void param_set(uint32_t i, int32_t v)
     v = clamp(v, 0, (int32_t)pmax(i));
     if ((uint32_t)v == pget(i))
         return;
+    if (i == G_SLEN) {                       /* the pattern's length (kept with the sequences) */
+        sq.pat[set.g[G_SPAT - NP] % NPAT].len = (uint8_t)(v + 1);
+        sq_dirty = 1;
+        ui.redraw = 1;
+        return;
+    }
     if (i >= NP) {                           /* the instrument's settings */
         set.g[i - NP] = (uint8_t)v;
         set_dirty = 1;
-        if (i == G_ARP)
-            post(Q_ARP, (uint32_t)v, 0);
         if (i == G_LSYNC || (i == G_TEMPO && set.g[G_LSYNC - NP]))
             params_stale = 1;
         ui.redraw = 1;
@@ -1110,6 +1184,9 @@ static void tap_tempo(void)                 /* PLAY tapped: the tempo from the l
     app_say("TEMPO", t);
 }
 
+static uint32_t arp_down_ms;
+static uint8_t arp_long;
+
 static void input(void)
 {
     uint32_t keys, btn = plat_buttons(), k, at = 0;
@@ -1147,18 +1224,32 @@ static void input(void)
             octave_step(1);
         else if (k == B_SAVE)
             save();
-        else if (k == B_ARP) {               /* OFF -> ON -> HOLD -> OFF, and its page */
-            char t[8];
-            param_set(G_ARP, (int32_t)((set.g[G_ARP - NP] + 1u) % 3u));
-            if (PAGE[set.page].btn != B_ARP)
-                page_show(NPAGE - 2u);
-            t[0] = 0;
-            text_cat(t, ARP_NAME[set.g[G_ARP - NP]]);
-            app_say("ARP", t);
+        else if (k == B_ARP) {               /* (on release: a long press is its pages) */
+            arp_down_ms = plat_ms();
+            arp_long = 0;
         } else if (k == B_PLAY)
             tap_tempo();
         else
             page_button(k);
+    }
+    if ((btn & 1u << B_ARP) && !arp_long && plat_ms() - arp_down_ms >= 500u) {   /* ARP held: ARP / ARP 2 */
+        arp_long = 1;
+        page_button(B_ARP);
+    }
+    if (!(btn & 1u << B_ARP) && (ui.btn & 1u << B_ARP) && !arp_long) {   /* ARP pressed: OFF -> ON -> HOLD -> OFF */
+        char t[8];
+        uint32_t v = (set.cur.v[P_ARP] + 1u) % 3u;
+        param_set(P_ARP, (int32_t)v);
+        plat_midi_send(0x0Bu | 0xB0u << 8 | (uint32_t)PARAM[P_ARP].cc << 16 | (v * 127u / 2u) << 24, TO_USB | TO_BLE);
+        if (PAGE[set.page].btn != B_ARP)
+            page_button(B_ARP);
+        t[0] = 0;
+        text_cat(t, ARP_NAME[v]);
+        app_say("ARP", t);
+    }
+    if (set.cur.v[P_ARP] != arp_posted) {    /* the arpeggiator switched (ARP, a patch, a CC) */
+        arp_posted = set.cur.v[P_ARP];
+        post(Q_ARP, arp_posted, 0);
     }
     for (k = 0; k < NE; k++) {
         char t[16];
@@ -1229,7 +1320,7 @@ static void input(void)
             beat_seen = arp_beat;
             beat_ms = plat_ms();
         }
-        if (set.g[G_ARP - NP])               /* the arpeggiator on: ARP lit, dark a moment on each beat */
+        if (set.cur.v[P_ARP])               /* the arpeggiator on: ARP lit, dark a moment on each beat */
             lit = (plat_ms() - beat_ms < 70u) ? lit & ~(1u << B_ARP) : lit | 1u << B_ARP;
         plat_leds(lit, keys);
     }
@@ -1399,7 +1490,9 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "at"))
         *got = at_now;
     else if (!strcmp(what, "arp"))
-        *got = set.g[G_ARP - NP];
+        *got = set.cur.v[P_ARP];
+    else if (!strcmp(what, "arpstate"))     /* as the audio side has it */
+        *got = arp.state;
     else if (!strcmp(what, "arplast"))      /* the last note the arpeggiator played */
         *got = arp.last;
     else if (!strcmp(what, "arpn"))         /* the notes in the arpeggiator */

@@ -216,8 +216,13 @@ key 9 up
 wait 300
 expect arpn 1
 expect arplast 62
-# HOLD, PLAYED: a melody, notes again: C4 held, then E4 D4 E4 tapped -> C4 E4 D4 E4
-tap SEQ
+# HOLD, PLAYED: a melody, notes again: C4 held, then E4 D4 E4 tapped -> C4 E4 D4 E4 (ARP held: ARP 2)
+press ARP
+wait 600
+release ARP
+wait 30
+expect page 13
+expect arp 2
 wait 30
 turn K3 1
 wait 30
@@ -243,8 +248,10 @@ wait 30
 tap ARP
 wait 30
 expect arp 2
-# ARP 2 (SEQ): TEMPO
-tap SEQ
+# ARP 2 (ARP held): TEMPO
+press ARP
+wait 600
+release ARP
 wait 30
 expect page 13
 turn K1 30
@@ -499,3 +506,16 @@ midi F8
 wait 25
 expect tempo >88
 expect tempo <103
+
+# the arpeggiator is the patch's: a patch with it on (52 values) switches it on; another patch off
+sysex F0 7D 4D 42 01 03 41 52 50 54 45 53 54 20 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 01 00 00 01 00 F7
+wait 30
+expect_sysex F0 7D 4D 42 7F 01 00 F7
+sysex F0 7D 4D 42 04 03 F7
+wait 30
+expect arp 1
+expect arpstate 1
+sysex F0 7D 4D 42 04 00 F7
+wait 30
+expect arp 0
+expect arpstate 0
