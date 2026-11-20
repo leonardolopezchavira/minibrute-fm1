@@ -1363,7 +1363,7 @@ static void ray(int32_t cx, int32_t cy, float deg, float r0, float r1, uint16_t 
 static void ctl_draw(uint32_t p, uint32_t v, int32_t cx, int32_t cy, int lit)
 {
     uint32_t max = pmax(p), kind = ctl_kind(p), k;
-    uint16_t hand = lit ? C_WHITE : C_ACCENT;
+    uint16_t hand = lit ? C_ACCENT : C_WHITE;   /* (white, as on the dark sheet; orange while turned) */
     if (kind == K_FADER) {                   /* a slot, a cap at the level, ticks beside */
         int32_t top = cy - 19, h = 38, at = top + h - (int32_t)(v * (uint32_t)h / (max ? max : 1u));
         for (k = 0; k <= 4u; k++)
@@ -1386,7 +1386,7 @@ static void ctl_draw(uint32_t p, uint32_t v, int32_t cx, int32_t cy, int lit)
         for (k = 0; k < n; k++)
             ray(cx, cy, a0 + step * (float)k, 13.0f, (bip && k == 5u) || k == 0u || k + 1u == n ? 18.0f : 16.0f,
                 en && k == v ? C_WHITE : C_GRAY);
-        disk(cx, cy, 11, C_DIM);
+        disk(cx, cy, 11, C_LINE);
         {   /* the pointer: three strokes wide */
             float a = en ? a0 + step * (float)(v < n ? v : 0u) : -135.0f + 270.0f * (float)v / (float)(max ? max : 1u);
             ray(cx, cy, a, 0.0f, 10.0f, hand);
@@ -1506,6 +1506,13 @@ static void draw(void)
 
 void app_ui_init(void)
 {
+    /* the site's dark look (tools/site_theme.py, the patch editor's dark sheet): black, the panel's grey, white
+     * labels and ticks, orange values (its display's) and highlights */
+    pal[0] = RGB(59, 59, 59);                /* C_LINE: the panel's grey #3b3b3b (slots, knob caps, rules) */
+    pal[1] = RGB(110, 110, 110);             /* C_DIM: what is off, K1..K4 */
+    pal[2] = RGB(236, 236, 236);             /* C_GRAY: the labels, the ticks: the sheet's white ink */
+    pal[3] = RGB(166, 166, 166);             /* C_AMB: secondary text #a6a6a6 */
+    pal[4] = RGB(240, 96, 40);               /* C_HI: the values, as the sheet's display has them: #f06028 */
     touch_on(1);
     lcd_fill(0, 0, 240, 240, C_BLACK);
     ui.redraw = 1;
