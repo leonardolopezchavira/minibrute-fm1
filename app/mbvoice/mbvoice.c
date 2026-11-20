@@ -491,16 +491,25 @@ void mb_render(MBVoice *v, float *out, int n) {
             }
             if (limw > 0.f) y = (y + limw * (C.lim_level * fast_tanh(y / C.lim_level) - y)) * lim_mk;   /* resonance squashes like the plugin */
             y *= C.mode_gain[p->filter_mode & 3] * rgain;
-            v->dec_hist[v->dec_pos] = y;
-            {   /* the VCA (a transistor pair), then the feedback path's coupling capacitor: no DC goes round */
+            v->dec_hist[v->dec_pos] = v->dec_hist[v->dec_pos + DEC_TAPS] = y;
+            if (brute_a != 0.f) {   /* the VCA (a transistor pair), then the feedback path's coupling capacitor: no DC goes
+                                     * round (only the Brute Factor hears it) */
                 float fx = fast_tanh(C.vca_drive * y * amp) / C.vca_drive;
                 v->fb_y1 = fb_r * (v->fb_y1 + fx - v->fb_x1);
                 v->fb_x1 = fx;
                 v->vca_fb = v->fb_y1;
+            } else {
+                v->fb_y1 = v->fb_x1 = v->vca_fb = 0.f;
             }
             v->dec_pos = (v->dec_pos + 1) & (DEC_TAPS - 1);
         }
-        { int t; y = 0.f; for (t = 0; t < DEC_TAPS; t++) y += g_dec[t] * v->dec_hist[(v->dec_pos + t) & (DEC_TAPS - 1)]; }
+        {   /* the decimation FIR: symmetric, so each coefficient takes its pair at once; oldest to newest in a row */
+            const float *h = v->dec_hist + v->dec_pos;
+            int t;
+            y = 0.f;
+            for (t = 0; t < DEC_TAPS / 2; t++)
+                y += g_dec[t] * (h[t] + h[DEC_TAPS - 1 - t]);
+        }
         v->x_prev = s;
 
         /* --- VCA, then the output's coupling: no DC out --- */
