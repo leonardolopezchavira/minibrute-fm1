@@ -216,6 +216,33 @@ key 9 up
 wait 300
 expect arpn 1
 expect arplast 62
+# HOLD, PLAYED: a melody, notes again: C4 held, then E4 D4 E4 tapped -> C4 E4 D4 E4
+tap SEQ
+wait 30
+turn K3 1
+wait 30
+key 7 down
+wait 20
+tapkey 11
+wait 20
+tapkey 9
+wait 20
+tapkey 11
+wait 20
+key 7 up
+wait 20
+expect arpn 4
+turn K3 -1
+wait 30
+tap HOME
+wait 30
+tap ARP
+wait 30
+tap ARP
+wait 30
+tap ARP
+wait 30
+expect arp 2
 # ARP 2 (SEQ): TEMPO
 tap SEQ
 wait 30

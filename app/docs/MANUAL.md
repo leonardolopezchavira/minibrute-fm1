@@ -68,8 +68,9 @@ After the Minibrute's. ARP steps through OFF, ON and HOLD:
 
 - **ON** plays the keys while you hold them.
 - **HOLD** keeps playing the last chord when you let go; a key pressed with none held starts a new one. With
-  **HOLD ORD** PLAYED (ARP 2), the notes play in the order you pressed them, up to 16 (hold one key down, add
-  others); with PITCH, low to high.
+  **HOLD ORD** PLAYED (ARP 2), the notes play in the order you pressed them, up to 16, a note as often as you
+  play it: hold the first key down and tap the others (C held, then E, D, E: C E D E); with PITCH, a chord, low to
+  high.
 - **MODE**: UP, DOWN, UP/DOWN (the top and bottom notes play twice, as on the Minibrute) or RANDOM.
 - **OCTAVE**: over 1 to 4 octaves.
 - **STEP**: 1/4, 1/8, 1/16, or their triplets 1/4T, 1/8T, 1/16T.

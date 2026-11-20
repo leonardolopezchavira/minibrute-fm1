@@ -379,10 +379,16 @@ static void arp_key(uint32_t note, uint32_t vel)   /* a key or a MIDI note into 
             arp.pos = 0;
         }
         arp.held++;
-        for (i = 0; i < arp.n && arp.pool[i] != note; i++)
-            ;
-        if (i < arp.n || arp.n >= ARP_MAX)
+        if (arp.n >= ARP_MAX)
             return;
+        if (arp.state == 2u && set.g[G_HORD - NP]) {   /* HOLD, PLAYED: a melody, a note as often as it is played */
+            i = arp.n;
+        } else {                             /* a chord: each note once */
+            for (i = 0; i < arp.n && arp.pool[i] != note; i++)
+                ;
+            if (i < arp.n)
+                return;
+        }
         if (!set.g[G_HORD - NP])             /* by pitch */
             for (i = 0; i < arp.n && arp.pool[i] < note; i++)
                 ;
