@@ -22,7 +22,7 @@ typedef struct {
     float d_lp_hz;                        /* the low-pass in the feedback (and on the repeats) */
     float d_mix;                          /* 0..1 (0: the delay is off) */
     uint32_t d_pp;                        /* 1: ping-pong */
-    float r_decay;                        /* the tank's decay, 0..0.925 (the plugin's DECAY) */
+    float r_decay;                        /* the plugin's DECAY, 0..0.925 (the decay time as the plugin's) */
     float r_size;                         /* 0.1..1.5 (the plugin's SIZE) */
     float r_damp;                         /* 0..1 */
     float r_mix;                          /* 0..1 (0: the reverb is off) */
@@ -37,7 +37,7 @@ typedef struct {
     int16_t *dl;                          /* the delay memory */
     uint32_t dw;                          /* its write position */
     float d_cur;                          /* the delay time now, in samples (eased toward the set one) */
-    float d_lpa, d_lpb, d_hpa, d_hpb, d_hpxa, d_hpxb;   /* the feedback filters' states (line A, B) */
+    float d_lpa, d_lpb, d_lpa2, d_lpb2, d_hpa, d_hpb, d_hpxa, d_hpxb;   /* the feedback filters' states (line A, B) */
     float d_lpc;
     uint32_t d_pp_was, d_on, r_on, r_run;
     uint32_t d_fill;                      /* samples written since the delay came on (it reads no further) */
@@ -52,7 +52,7 @@ void mbfx_init(MBFx *f, float sr, int16_t *mem);   /* mem: MBFX_MEM int16 sample
 void mbfx_set(MBFx *f, const MBFxParams *p);
 /* in: n mono samples; outL/outR: the wet part (added to, not overwritten) */
 void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n);
-float mbfx_dry_gain(const MBFxParams *p);   /* the dry signal's share: (1 - delay mix) (1 - reverb mix) */
+float mbfx_dry_gain(const MBFxParams *p);   /* the dry signal's share (equal-power crossfades) */
 void mbfx_clear(MBFx *f);                    /* silence (the lines zeroed) */
 
 #endif

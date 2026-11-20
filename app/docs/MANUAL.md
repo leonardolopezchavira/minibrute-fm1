@@ -92,14 +92,16 @@ LFO CLK belong to the instrument (one tempo for every patch).
 ## The effects
 
 A delay and then a reverb, after the plugin's (its usual order); saved with each patch. They are stereo: the
-voice in the middle, the repeats and the reverb around it. With MIX at 0 an effect is off.
+voice in the middle, the repeats and the reverb around it. With MIX at 0 an effect is off; half way, dry and wet are
+both at -3 dB (an equal-power crossfade, as the plugin's). Matched to the plugin's delay and reverb by measurement.
 
 - **DELAY**: **TIME** 2 ms to 1.5 s (0.74 s in PING-PONG), on the plugin's scale; with **DLY SYNC** CLOCK (FX 2) it
   picks a note value instead (1/32 .. 1/1, triplets and dotted too) on the arpeggiator's and sequencer's tempo.
-  **FEEDBACK** the repeats; **TONE** a low-pass on them (each repeat darker); **MIX** dry to wet. **DLY MODE** (FX 2):
+  **FEEDBACK** the repeats; **TONE** a low-pass on them (12 dB an octave; each repeat darker); **MIX** dry to wet. **DLY MODE** (FX 2):
   STEREO (the repeats in the middle) or PING-PONG (left, right, left...). Turning TIME glides, as tape does.
-- **REVERB**: a plate. **DECAY** how long it rings, **SIZE** the room, **DAMP** how quickly its highs die away, **MIX**
-  dry to wet; **PRE-DLY** (FX 2) a gap before it, 0 to 200 ms.
+- **REVERB**: a plate. **DECAY** how long it rings (about 0.7 to 9 s at SIZE half way, as the plugin's), **SIZE** the
+  room (it scales the decay too), **DAMP** how quickly it dies away, darker as it goes; **MIX** dry to wet; **PRE-DLY**
+  (FX 2) a gap before it, 0 to 200 ms.
 
 They run on the FM-1's second core while the first plays the voice (the screen's foot shows **2C**). On a unit whose
 second core is unreliable (some are), MB-1 notices, gives it up until power-off, and runs them on the first (**1C**):
