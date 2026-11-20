@@ -373,7 +373,9 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     midi_in();
     mb_render(&voice, buf, (int)n);
     for (i = 0; i < n; i++) {
-        float y = fm_clampf(buf[i], -1.0f, 1.0f);
+        float y = buf[i], a = fm_fabsf(y);
+        if (a > 0.8f)                        /* a soft ceiling above -2 dB (loud resonant BP/HP), not a hard clip */
+            y = (y > 0.0f ? 1.0f : -1.0f) * (0.8f + 0.2f * fm_tanhf((a - 0.8f) * 5.0f));
         int32_t s = (int32_t)(y * g);
         lr[2u * i] = s;
         lr[2u * i + 1u] = s;

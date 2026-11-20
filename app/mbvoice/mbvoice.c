@@ -97,6 +97,9 @@ MBCal mb_cal = {
     .mt_a0 = 2.71306f,
     .mt_d = 1.58136f,
     .mt_norm = 0.5f,
+    .mode_mix = { 1.0f, 0.0f, 0.0f,  0.0028f, 0.9791f, 0.0f,  0.0491f, 1.9803f, 1.0579f,  1.0216f, 1.95f, 0.983f },
+    .mode_damp = { 0.0f, 11.257f, 3.5502f, 2.3058f },
+    .mode_fr = { 1.0f, 1.0776f, 1.2921f, 0.9257f },
 };
 #define C mb_cal
 /* ---- helpers ----------------------------------------------------------------------- */
@@ -311,6 +314,7 @@ void mb_render(MBVoice *v, float *out, int n) {
     const float lim_mk = limw > 0.f ? mb_powf(C.lim_makeup, mb_powf(limw, C.lim_makeup_exp)) : 1.f;
     const float shw = clampf((res - C.shaper_res_start) / mb_fmaxf(1.f - C.shaper_res_start, 0.01f), 0.f, 1.f);
     const float sub_k = 1.f - mb_expf(-2.f * PI * C.sub_sine_fc * isr);
+    const float *mm = &C.mode_mix[3 * (p->filter_mode & 3)];
     int i, o;
 
     if (!v->gate && v->ast == 0) {           /* silent (no note, the amp envelope done): nothing to compute */
@@ -400,14 +404,14 @@ void mb_render(MBVoice *v, float *out, int n) {
             float knob_eff = clampf(p->cutoff_hz * mb_exp2f(oct), 10.f, 40000.f);
             float corr = ringw > 0.f ? 1.f + ringw * (ring_tab(C.ring_fcorr, knob_eff) - 1.f)
                                      : knob_corr(knob_eff);
-            float fc = clampf(filter_freq(knob_eff, res) * corr, 10.f, 0.45f * sr * OS);
+            float fc = clampf(filter_freq(knob_eff, res) * corr * C.mode_fr[p->filter_mode & 3], 10.f, 0.45f * sr * OS);
             v->c_rgain = 1.f + ringw * (ring_tab(C.ring_gain, knob_eff) - 1.f);
             v->c_g = mb_tanf(PI * fc / (sr * OS));
             v->c_ringout = knob_eff < C.ring_lo || knob_eff > C.ring_hi;
         }
         v->ctl_cnt = (v->ctl_cnt + 1) & (CTRL - 1);
         const float g = v->c_g, rgain = v->c_rgain;
-        float kd = k_damp;
+        float kd = k_damp * (1.f + C.mode_damp[p->filter_mode & 3] * res * res);   /* (the modes resonate less than LP) */
         if (agw > 0.f) kd += agw * C.agc_k * mb_fmaxf(v->agc_env - C.agc_level, 0.f);   /* loud resonance damps itself */
         if (kd < 0.05f && v->c_ringout) kd = 0.05f;   /* plugin stops ringing outside this range */
         float a1 = 1.f / (1.f + g * (g + kd)), a2 = g * a1, a3 = g * a2;
@@ -434,12 +438,7 @@ void mb_render(MBVoice *v, float *out, int n) {
             float lp = v2, bp = v1, hp = v0 - kd * v1 - v2;
             { float a = mb_fabsf(bp); v->agc_env += (a > v->agc_env ? 0.002f : 0.0002f) * (a - v->agc_env); }
             v->brute_fb = lp;
-            switch (p->filter_mode) {
-            case MB_FILT_BP: y = bp; break;
-            case MB_FILT_HP: y = hp; break;
-            case MB_FILT_NOTCH: y = lp + hp; break;
-            default: y = lp; break;
-            }
+            y = mm[0] * lp + mm[1] * bp + mm[2] * hp;     /* the mode (C.mode_mix) */
             if (shw > 0.f) {                   /* resonant tone: the plugin's 2nd/3rd/5th harmonics, at the oversampled rate */
                 v->ring_pk += 0.0002f * (y * y - v->ring_pk);              /* smooth mean-square follower (~25 ms) */
                 float pk = mb_fmaxf(1.41421f * mb_sqrtf(v->ring_pk), 1e-6f), u = clampf(y / pk, -1.2f, 1.2f), u2 = u * u;
