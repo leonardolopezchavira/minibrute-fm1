@@ -165,6 +165,9 @@ static float metal_wave(float ph, float m, float f0, float sr) {
     float va = a[i0] + (a[i1] - a[i0]) * fr, vb = b[i0] + (b[i1] - b[i0]) * fr;
     return va + (vb - va) * sf;
 }
+typedef struct { float m, f0; } MetalCtl;
+static void metal_ctl(MetalCtl *c, float m, float f0) { c->m = m; c->f0 = f0; }
+static float metal_os(const MetalCtl *c, float ph, float sr_os) { return metal_wave(ph, c->m, c->f0, sr_os); }
 
 #else
 static inline float fold_stage(float x) {      /* one folding stage (metal_stage.h), interpolated */
@@ -175,21 +178,28 @@ static inline float fold_stage(float x) {      /* one folding stage (metal_stage
     i = (int)f;
     return MS_TAB[i] + (MS_TAB[i + 1] - MS_TAB[i]) * (f - (float)i);
 }
-static float metal_wave(float ph, float m, float f0, float sr) {
-    /* the folds' harmonics alias at 44.1 kHz on high notes: the folding fades out from 2 kHz to 6 kHz */
-    float fade = clampf((6000.f - f0) * (1.f / 4000.f), 0.f, 1.f), tri, a, g, y;
-    (void)sr;
-    tri = tri_skewed(ph, C.tri_skew);
-    if (m <= 0.f || fade <= 0.f) return tri;
-    const float mt_kn = 1.f / fast_tanh(C.mt_k);
-    g = C.mt_g0 + C.mt_g1 * mb_powf(m, C.mt_pw);
-    a = (C.mt_a0 + C.mt_a1 * m) * clampf(m * 10.f, 0.f, 1.f) * fade;   /* (the knob's second gang brings the folds in) */
-    {   /* the folded path: the triangle a little behind the clean one, rounded by the input stage, offset */
-        float t2 = 1.f - 4.f * mb_fabsf(frac(ph - C.mt_phase + 1.f) - 0.5f);
-        t2 = fast_tanh(C.mt_k * t2) * mt_kn;
-        y = fold_stage(fold_stage(fold_stage(fold_stage(clampf(g * t2 + C.mt_d + C.mt_d1 * m, -10.8f, 10.8f)))));
-    }
-    return (tri + a * y * (1.f / 10.8f)) / (1.f + C.mt_norm * m);
+/* the Metalizer runs at the filter's oversampled rate: its folds' harmonics would alias at the base rate */
+typedef struct { float m, f0, g, a, d, norm, kn; int on; } MetalCtl;
+static void metal_ctl(MetalCtl *c, float m, float f0) {     /* once a sample: what the knob, envelope and LFO set */
+    float fade = clampf((10000.f - f0) * (1.f / 5000.f), 0.f, 1.f);   /* (above 5 kHz the folding fades out) */
+    c->m = m; c->f0 = f0;
+    c->on = m > 0.f && fade > 0.f;
+    if (!c->on) return;
+    c->kn = 1.f / fast_tanh(C.mt_k);
+    c->g = C.mt_g0 + C.mt_g1 * mb_powf(m, C.mt_pw);
+    c->a = (C.mt_a0 + C.mt_a1 * m) * clampf(m * 10.f, 0.f, 1.f) * fade * (1.f / 10.8f);   /* (the knob's second gang brings the folds in) */
+    c->d = C.mt_d + C.mt_d1 * m;
+    c->norm = 1.f / (1.f + C.mt_norm * m);
+}
+static float metal_os(const MetalCtl *c, float ph, float sr_os) {
+    float tri = tri_skewed(ph, C.tri_skew), t2, y;
+    (void)sr_os;
+    if (!c->on) return tri;
+    /* the folded path: the triangle a little behind the clean one, rounded by the input stage, offset */
+    t2 = 1.f - 4.f * mb_fabsf(frac(ph - C.mt_phase + 1.f) - 0.5f);
+    t2 = fast_tanh(C.mt_k * t2) * c->kn;
+    y = fold_stage(fold_stage(fold_stage(fold_stage(clampf(c->g * t2 + c->d, -10.8f, 10.8f)))));
+    return (tri + c->a * y) * c->norm;
 }
 #endif
 
@@ -392,10 +402,9 @@ void mb_render(MBVoice *v, float *out, int n) {
             float sq = (v->ph < duty ? 1.f : -1.f) + poly_blep(v->ph, dt) - poly_blep(frac(v->ph - duty + 1.f), dt);
             s += g_sq * sq;
         }
-        if (g_tri > 0.f) {
-            float m = clampf(p->metalizer + p->metal_env * v->fenv + C.metal_lfo * p->lfo_pwm_metal * lfo, 0.f, 1.f);
-            s += g_tri * metal_wave(v->ph, m, f0, sr);
-        }
+        MetalCtl mc = {0};                   /* the triangle and Metalizer: in the oversampled loop below */
+        if (g_tri > 0.f)
+            metal_ctl(&mc, clampf(p->metalizer + p->metal_env * v->fenv + C.metal_lfo * p->lfo_pwm_metal * lfo, 0.f, 1.f), f0);
         if (g_sub > 0.f) {
             float sub = p->sub_sine ? (v->sub_lp += sub_k * (tri_skewed(v->sub_ph, 0.f) - v->sub_lp))
                                     : (v->sub_ph < 0.5f ? 1.f : -1.f) + poly_blep(v->sub_ph, dt * subdiv) - poly_blep(frac(v->sub_ph + 0.5f), dt * subdiv);
@@ -432,6 +441,8 @@ void mb_render(MBVoice *v, float *out, int n) {
         float y = 0.f;
         for (o = 0; o < OS; o++) {
             float xin = v->x_prev + (s - v->x_prev) * (float)(o + 1) / OS;
+            if (g_tri > 0.f)                   /* the triangle at this sub-sample's phase */
+                xin += g_tri * metal_os(&mc, frac(v->ph - dt * (1.f - (float)(o + 1) / OS) + 1.f), sr * OS);
             float vin = xin + brute_a * v->vca_fb - bass_a * (1.f - ringw) * v->brute_fb;
             if (in_r < 1.f) {                  /* the filter's input coupling: no DC into it (and none round the Brute loop) */
                 float hy = in_r * (v->in_y1 + vin - v->in_x1);
