@@ -44,7 +44,7 @@ MBCal mb_cal = {
     .svf_sat = 25.0f,
     .in_drive = 0.632456f,
     .mode_gain = { 1.0f, 1.96436f, 1.0473f, 0.58569f },
-    .brute_k = 1.33889f,
+    .brute_k = 2.27755f,
     .vib_st = 5.4f,
     .vib_sq_st = 3.0f,
     .at_vib_st = 5.3f,
@@ -79,6 +79,10 @@ MBCal mb_cal = {
     .agc_k = 3.0f,
     .agc_level = 2.4f,
     .agc_start = 0.6f,
+    .vca_drive = 1.0f,
+    .fb_hp_hz = 1.0f,
+    .in_hp_hz = 0.0f,
+    .out_hp_hz = 1.0f,
 };
 #define C mb_cal
 /* ---- helpers ----------------------------------------------------------------------- */
@@ -283,6 +287,9 @@ void mb_render(MBVoice *v, float *out, int n) {
     float k_damp = res < 0.9f ? 1.f / lerp_tab(C.res_q, res)
                  : (1.f / C.res_q[9]) + (C.selfosc_k - 1.f / C.res_q[9]) * (res - 0.9f) * 10.f;
     const float brute_a = C.brute_k * p->brute;
+    const float fb_r = 1.f - 2.f * PI * C.fb_hp_hz / (sr * OS);   /* the DC blockers' poles */
+    const float in_r = 1.f - 2.f * PI * C.in_hp_hz / (sr * OS);
+    const float out_r = 1.f - 2.f * PI * C.out_hp_hz / sr;
     const float bass_a = C.bass_k * mb_powf(clampf(p->resonance, 0.f, 1.f), C.bass_exp);
     const float fa = env_att(p->f_a, sr), fd = env_fac(p->f_d, sr), fr = env_fac(p->f_r, sr);
     const float aa = env_att(p->a_a, sr), ad = env_fac(p->a_d, sr), ar = env_fac(p->a_r, sr);
@@ -363,11 +370,20 @@ void mb_render(MBVoice *v, float *out, int n) {
         float limw = clampf((res - C.lim_start) / mb_fmaxf(0.9f - C.lim_start, 0.01f), 0.f, 1.f) * (1.f - ringw);
         float lim_mk = limw > 0.f ? mb_powf(C.lim_makeup, mb_powf(limw, C.lim_makeup_exp)) : 1.f;
         float shw = clampf((res - C.shaper_res_start) / mb_fmaxf(1.f - C.shaper_res_start, 0.01f), 0.f, 1.f);
+        /* --- VCA gain (before the filter: the Brute Factor takes the VCA's output back to the mixer) --- */
+        float la = p->lfo_amp >= 0.f ? lfo_a : -lfo_a;
+        float amp = v->aenv * avel * clampf(1.f + mb_fabsf(p->lfo_amp) * (la - 1.f), 0.f, 1.f);
         /* --- filter, oversampled TPT SVF with saturating band state + Brute feedback --- */
         float y = 0.f;
         for (o = 0; o < OS; o++) {
             float xin = v->x_prev + (s - v->x_prev) * (float)(o + 1) / OS;
-            float v0 = fast_tanh(C.in_drive * (xin + (brute_a - bass_a * (1.f - ringw)) * v->brute_fb)) / C.in_drive + C.noise_inject * noise(&v->rng);
+            float vin = xin + brute_a * v->vca_fb - bass_a * (1.f - ringw) * v->brute_fb;
+            if (in_r < 1.f) {                  /* the filter's input coupling: no DC into it (and none round the Brute loop) */
+                float hy = in_r * (v->in_y1 + vin - v->in_x1);
+                v->in_x1 = vin;
+                vin = v->in_y1 = hy;
+            }
+            float v0 = fast_tanh(C.in_drive * vin) / C.in_drive + C.noise_inject * noise(&v->rng);
             float v3 = v0 - v->hp;                     /* hp field holds ic2eq */
             float v1 = a1 * v->bp + a2 * v3;
             float v2 = v->hp + a2 * v->bp + a3 * v3;
@@ -389,15 +405,25 @@ void mb_render(MBVoice *v, float *out, int n) {
                 y += shw * pk * (C.ring_h2 * t2 + C.ring_h3 * t3 + C.ring_h5 * t5);
             }
             if (limw > 0.f) y = (y + limw * (C.lim_level * fast_tanh(y / C.lim_level) - y)) * lim_mk;   /* resonance squashes like the plugin */
-            v->dec_hist[v->dec_pos] = y * C.mode_gain[p->filter_mode & 3] * rgain;
+            y *= C.mode_gain[p->filter_mode & 3] * rgain;
+            v->dec_hist[v->dec_pos] = y;
+            {   /* the VCA (a transistor pair), then the feedback path's coupling capacitor: no DC goes round */
+                float fx = fast_tanh(C.vca_drive * y * amp) / C.vca_drive;
+                v->fb_y1 = fb_r * (v->fb_y1 + fx - v->fb_x1);
+                v->fb_x1 = fx;
+                v->vca_fb = v->fb_y1;
+            }
             v->dec_pos = (v->dec_pos + 1) & (DEC_TAPS - 1);
         }
         { int t; y = 0.f; for (t = 0; t < DEC_TAPS; t++) y += g_dec[t] * v->dec_hist[(v->dec_pos + t) & (DEC_TAPS - 1)]; }
         v->x_prev = s;
 
-        /* --- VCA --- */
-        float la = p->lfo_amp >= 0.f ? lfo_a : -lfo_a;
-        float amp = v->aenv * avel * clampf(1.f + mb_fabsf(p->lfo_amp) * (la - 1.f), 0.f, 1.f);
-        out[i] = y * amp * master;
+        /* --- VCA, then the output's coupling: no DC out --- */
+        {
+            float yo = y * amp * master;
+            v->out_y1 = out_r * (v->out_y1 + yo - v->out_x1);
+            v->out_x1 = yo;
+            out[i] = v->out_y1;
+        }
     }
 }
