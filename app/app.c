@@ -826,7 +826,12 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         if (fx_beats_now > 0.0f)
             q.d_time_s = fx_beats_now * 60.0f / arp_tempo_now();
         dry = mbfx_dry_gain(&q);
-        if (fn && (q.d_mix > 0.001f || q.r_mix > 0.001f || fx.d_on || fx.r_on)) {
+        int quiet = fx.alive < 1e-5f;        /* (the effects silent, and the voice too: nothing to do) */
+        for (i = 0; quiet && i < fn; i++)
+            quiet = fm_fabsf(fx_in[i]) < 1e-6f;
+        if (quiet)
+            fx.d_on = 0;                     /* (idle: the delay starts afresh when it is next heard) */
+        if (fn && !quiet && (q.d_mix > 0.001f || q.r_mix > 0.001f || fx.d_on || fx.r_run)) {
             mbfx_set(&fx, &q);
             for (i = 0; i < fn; i++)
                 fx_wl[i] = fx_wr[i] = 0.0f;

@@ -126,6 +126,7 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
     uint32_t pre = (uint32_t)(p->r_pre_s * f->sr), j;
     const float lr_c = 0.99999998f, lr_s = 6.2831853f * 1.0f / 44100.0f;   /* (1 Hz a step: cos, sin) */
     uint32_t a1[2], d1[2], a2[2], d2[2];
+    float r_alive = 0.0f;
     if (pre < 1u)
         pre = 1u;
     if (pre > MBFX_PRE_LEN - 1u)
@@ -134,20 +135,21 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
         target = 1.0f;
     if (target > maxd)
         target = maxd;
-    if (d_on && (!f->d_on || pp != f->d_pp_was)) {   /* switched on (or its mode): from silence */
-        mb_zero(f->dl, MBFX_DL_LEN * sizeof(int16_t));
+    /* No memory is cleared here (200 KB at once would overrun a block): the delay, switched on (or its mode), reads
+     * silence until it has written as far back as it reads (d_fill); the reverb, switched off, runs on unheard with
+     * no input until its tail has died away (r_run), so that switched on again it starts from silence. */
+    if (d_on && (!f->d_on || pp != f->d_pp_was)) {
+        f->d_fill = 0;
         f->d_lpa = f->d_lpb = f->d_hpa = f->d_hpb = f->d_hpxa = f->d_hpxb = 0.0f;
         f->d_cur = target;
     }
-    if (r_on && !f->r_on) {
-        mb_zero(f->pre.buf, (MBFX_PRE_LEN + MBFX_REV_LEN) * sizeof(int16_t));
-        f->r_lp_in = f->r_damp_st[0] = f->r_damp_st[1] = f->r_tank_fb[0] = f->r_tank_fb[1] = 0.0f;
+    if (r_on && !f->r_run)
         f->r_scale = k;
-    }
     f->d_on = (uint32_t)d_on;
     f->r_on = (uint32_t)r_on;
     f->d_pp_was = pp;
-    if (!d_on && !r_on)
+    f->alive = 0.0f;
+    if (!d_on && !r_on && !f->r_run)
         return;
     f->r_scale += 0.1f * (k - f->r_scale);   /* (a size turned: eased, block by block) */
     k = f->r_scale;
@@ -163,14 +165,15 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
         d2[j] = sc(DL2[j], k);
     }
     for (i = 0; i < n; i++) {
-        float x = in[i], yl = 0.0f, yr = 0.0f, dl_, dr_;
+        float x = in[i], yl = 0.0f, yr = 0.0f, dl_, dr_, ax;
         if (d_on) {
             float d = f->d_cur += 0.0005f * (target - f->d_cur);   /* (a time turned: glides, as tape) */
             uint32_t di = (uint32_t)d, w = f->dw;
             float fr = d - (float)di;
+            int fresh = di + 1u < f->d_fill;   /* (not yet written that far back: silence) */
             if (!pp) {
                 uint32_t r0 = (w - di) & mask, r1 = (w - di - 1u) & mask;
-                float a = from16(f->dl[r0]) + fr * (from16(f->dl[r1]) - from16(f->dl[r0]));
+                float a = fresh ? from16(f->dl[r0]) + fr * (from16(f->dl[r1]) - from16(f->dl[r0])) : 0.0f;
                 float h;
                 f->d_lpa += lpc * (a - f->d_lpa);
                 f->d_hpa += hpc * (f->d_lpa - f->d_hpa);
@@ -180,8 +183,8 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
             } else {                          /* two lines, each feeding the other: L, R, L, ... */
                 int16_t *A = f->dl, *B = f->dl + half;
                 uint32_t r0 = (w - di) & mask, r1 = (w - di - 1u) & mask;
-                float a = from16(A[r0]) + fr * (from16(A[r1]) - from16(A[r0]));
-                float b = from16(B[r0]) + fr * (from16(B[r1]) - from16(B[r0]));
+                float a = fresh ? from16(A[r0]) + fr * (from16(A[r1]) - from16(A[r0])) : 0.0f;
+                float b = fresh ? from16(B[r0]) + fr * (from16(B[r1]) - from16(B[r0])) : 0.0f;
                 float ha, hb;
                 f->d_lpa += lpc * (a - f->d_lpa);
                 f->d_lpb += lpc * (b - f->d_lpb);
@@ -195,14 +198,19 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
                 yr = f->d_lpb;
             }
             f->dw = (w + 1u) & mask;
+            if (f->d_fill <= mask)
+                f->d_fill++;
+            ax = mb_fabsf(yl) + mb_fabsf(yr);
+            if (ax > f->alive)
+                f->alive = ax;
         }
         dl_ = (1.0f - dm) * x + dm * yl;
         dr_ = (1.0f - dm) * x + dm * yr;
         outL[i] += (1.0f - rm) * dm * yl;
         outR[i] += (1.0f - rm) * dm * yr;
-        if (r_on) {
+        if (r_on || f->r_run) {
             float v, lo, ro, m0, m1;
-            line_put(&f->pre, 0.5f * (dl_ + dr_));
+            line_put(&f->pre, r_on ? 0.5f * (dl_ + dr_) : 0.0f);
             v = line_tap(&f->pre, pre);
             f->r_lp_in += 0.6f * (v - f->r_lp_in);   /* the input's bandwidth (about 9 kHz) */
             v = allpass(&f->in_ap[0], f->r_lp_in, 0.75f, IN_AP[0]);
@@ -237,6 +245,15 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
                  line_tap(&f->dl2[1], sc(179, k));
             outL[i] += rm * 0.6f * lo;
             outR[i] += rm * 0.6f * ro;
+            ax = mb_fabsf(v) + mb_fabsf(f->r_tank_fb[0]) + mb_fabsf(f->r_tank_fb[1]);
+            if (ax > r_alive)
+                r_alive = ax;
         }
     }
+    if (r_on)
+        f->r_run = 1;
+    if (r_alive > f->alive)
+        f->alive = r_alive;
+    if (!r_on && f->r_run && r_alive < 1e-5f)  /* (off, and its tail gone: it stops) */
+        f->r_run = 0;
 }

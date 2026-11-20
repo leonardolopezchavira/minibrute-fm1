@@ -39,7 +39,9 @@ typedef struct {
     float d_cur;                          /* the delay time now, in samples (eased toward the set one) */
     float d_lpa, d_lpb, d_hpa, d_hpb, d_hpxa, d_hpxb;   /* the feedback filters' states (line A, B) */
     float d_lpc;
-    uint32_t d_pp_was, d_on, r_on;
+    uint32_t d_pp_was, d_on, r_on, r_run;
+    uint32_t d_fill;                      /* samples written since the delay came on (it reads no further) */
+    float alive;                          /* the last block's loudest wet or internal sample (0: silent) */
     MBFxLine pre, in_ap[4], ap1[2], dl1[2], ap2[2], dl2[2];
     float r_lp_in, r_damp_st[2], r_tank_fb[2];
     float r_lc, r_ls;                    /* the tank LFO: cos, sin */
