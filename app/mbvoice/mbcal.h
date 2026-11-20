@@ -48,6 +48,11 @@ typedef struct {
     float mode_damp[4], mode_fr[4];   /* per mode: the resonance's damping and its frequency, relative to LP's */
     float mt_phase, mt_d1, mt_k, mt_a1;  /* Metalizer: the folded path's lag behind the clean triangle (cycles); the
                                           * offset's and the amount's slope with the knob; the input stage's rounding */
+    /* the resonance's pitch follows its own level (the Steiner-Parker's diodes: a louder ring conducts harder and rings
+     * higher; the plugin: +1 %/dB at RES 80 %, +6 %/dB at 90..100 %): the cutoff times (level / its slow mean)^c,
+     * c at RES 0.7, 0.8, 0.9, 1.0; the level's and its slow mean's time constants */
+    float pw_c[4], pw_slow_s;
+    float pw_fast_s;               /* the level's follower: this many cycles of the cutoff */
 } MBCal;
 extern MBCal mb_cal;
 #endif

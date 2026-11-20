@@ -104,6 +104,9 @@ MBCal mb_cal = {
     .mt_d1 = -0.1242f,
     .mt_k = 0.5766f,
     .mt_a1 = 0.1222f,
+    .pw_c = { 0.0f, 0.12f, 0.3f, 0.3f },
+    .pw_slow_s = 0.15f,
+    .pw_fast_s = 3.0f,
 };
 #define C mb_cal
 /* ---- helpers ----------------------------------------------------------------------- */
@@ -424,6 +427,26 @@ void mb_render(MBVoice *v, float *out, int n) {
                                      : knob_corr(knob_eff);
             float fc = clampf(filter_freq(knob_eff, res) * corr * C.mode_fr[p->filter_mode & 3], 10.f, 0.45f * sr * OS);
             v->c_rgain = 1.f + ringw * (ring_tab(C.ring_gain, knob_eff) - 1.f);
+            if (res > 0.7f) {                  /* the resonance's pitch follows its level */
+                float t = (res - 0.7f) * 10.f, c;
+                int i = (int)t;
+                if (i > 2) i = 2;
+                c = C.pw_c[i] + (C.pw_c[i + 1] - C.pw_c[i]) * (t - (float)i);
+                float lv;
+                v->pw_fast += clampf(CTRL * fc / (C.pw_fast_s * sr), 0.f, 0.5f) * (mb_fabsf(v->bp) - v->pw_fast);
+                lv = mb_log2f(v->pw_fast + 1e-4f);                 /* (in octaves of level: the pitch keeps its mean) */
+                v->pw_slow += (CTRL / (C.pw_slow_s * sr)) * (lv - v->pw_slow);
+                v->pw_gin = 1.f;
+                if (c != 0.f) {
+                    float e = clampf(c * (lv - v->pw_slow), -0.7f, 0.7f);
+                    fc = clampf(fc * mb_exp2f(e), 10.f, 0.45f * sr * OS);
+                    v->pw_gin = mb_exp2f(-0.5f * e);   /* (a higher ring is wider: as much noise power as before) */
+                }
+            } else {
+                v->pw_fast = mb_fabsf(v->bp);
+                v->pw_slow = mb_log2f(v->pw_fast + 1e-4f);
+                v->pw_gin = 1.f;
+            }
             v->c_g = mb_tanf(PI * fc / (sr * OS));
             v->c_ringout = knob_eff < C.ring_lo || knob_eff > C.ring_hi;
         }
@@ -450,6 +473,7 @@ void mb_render(MBVoice *v, float *out, int n) {
                 vin = v->in_y1 = hy;
             }
             float v0 = fast_tanh(C.in_drive * vin) / C.in_drive + C.noise_inject * noise(&v->rng);
+            if (v->pw_gin != 1.f && v->pw_gin > 0.f) v0 *= v->pw_gin;
             float v3 = v0 - v->hp;                     /* hp field holds ic2eq */
             float v1 = a1 * v->bp + a2 * v3;
             float v2 = v->hp + a2 * v->bp + a3 * v3;
