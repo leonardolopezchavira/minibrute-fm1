@@ -29,7 +29,7 @@ MBCal mb_cal = {
     .us_exp = 1.0f,
     .us_beta = 0.5f,
     .us_rate_mult = 1.045f,
-    .us_main = 0.4f,
+    .us_main = 0.888889f,
     .us_phase0 = 0.85f,
     .metal_gain = 12.0f,
     .metal_lower_start = 0.74f,
@@ -83,6 +83,12 @@ MBCal mb_cal = {
     .fb_hp_hz = 1.0f,
     .in_hp_hz = 0.0f,
     .out_hp_hz = 1.0f,
+    .us_fixed_hz = 0.0542884f,
+    .us_depth = 1.075f,
+    .us_pulse = -1.47222f,
+    .us_shape = 0.948624f,
+    .us_gain = 2.16012f,
+    .us_phase1 = 0.0f,
 };
 #define C mb_cal
 /* ---- helpers ----------------------------------------------------------------------- */
@@ -209,6 +215,7 @@ void mb_init(MBVoice *v, float sr) {
     mb_copy(&v->p, &keep, sizeof keep); v->sr = sr; v->rng = 0x12345678u; v->note = -1;
     v->pitch_st = v->target_st = 60.f;
     v->us_lfo = C.us_phase0;
+    v->us_ph1 = C.us_phase1;
 }
 
 
@@ -281,7 +288,7 @@ void mb_render(MBVoice *v, float *out, int n) {
     const float master = C.out_ref * mb_exp2f(p->master_db * 0.16609640f);
     const float vel = (float)v->vel / 127.f;
     const float avel = 1.f - p->amp_vel + p->amp_vel * vel, fvel = 1.f - p->fenv_vel + p->fenv_vel * vel;
-    const float us_mix = C.us_mix * mb_powf(p->ultrasaw, C.us_exp), us_beta = C.us_beta;
+    const float us_shn = 1.f / fast_tanh(C.us_shape);          /* the Ultrasaw LFOs' shaping, normalised */
     const float glide_rate = p->glide_s_oct > 0.f ? 12.f / p->glide_s_oct * isr : 1e9f;
     const float res = clampf(p->resonance, 0.f, 1.f);
     float k_damp = res < 0.9f ? 1.f / lerp_tab(C.res_q, res)
@@ -324,10 +331,18 @@ void mb_render(MBVoice *v, float *out, int n) {
         float s = 0.f;
         if (g_saw > 0.f) {
             float sw = saw_down(v->ph, dt);
-            if (us_mix != 0.f) {
+            if (p->ultrasaw > 0.f) {
+                float c = 0.f; int k;
                 v->us_lfo = frac(v->us_lfo + C.us_rate_mult * p->ultrasaw_rate_hz * isr);
-                float cph = frac(v->ph + us_beta * mb_sinf(2.f * PI * v->us_lfo));
-                sw = (1.f + C.us_main * p->ultrasaw) * sw + us_mix * saw_down(cph, dt);
+                v->us_ph1 = frac(v->us_ph1 + C.us_fixed_hz * isr);
+                for (k = 0; k < 2; k++) {        /* each copy: the saw, its LFO taken off, a pulse while the saw is above it */
+                    float lph = k ? v->us_lfo : v->us_ph1;
+                    float L = C.us_depth * fast_tanh(C.us_shape * (1.f - 4.f * mb_fabsf(lph - 0.5f))) * us_shn;
+                    float pc = clampf(0.5f * (1.f - L), 0.02f, 0.98f);   /* where the falling saw crosses L */
+                    float pulse = (v->ph < pc ? 1.f : 0.f) + 0.5f * (poly_blep(v->ph, dt) - poly_blep(frac(v->ph - pc + 1.f), dt));
+                    c += sw + C.us_pulse * pulse - L;
+                }
+                sw = (sw + p->ultrasaw * C.us_gain * c) / (1.f + C.us_main * p->ultrasaw);
             }
             s += g_saw * sw;
         }
