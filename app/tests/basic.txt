@@ -34,7 +34,7 @@ wait 60
 expect p0 86
 expect edited 1
 expect posted 1
-# the pages: SEL the oscillators, again OSC 2; HOME back to the filter; SELECT steps
+# the pages: SEL the oscillators (SAW, then SQUARE); held, back to its first; HOME back to the filter; SELECT steps
 tap SEL
 wait 30
 expect page 2
@@ -42,6 +42,11 @@ tap SEL
 wait 30
 expect page 3
 shot osc2.png
+press SEL
+wait 600
+release SEL
+wait 30
+expect page 2
 tap HOME
 wait 30
 expect page 0
@@ -50,24 +55,24 @@ wait 30
 expect page 1
 tap ENV
 wait 30
-expect page 4
+expect page 6
 shot env.png
 tap LFO
 wait 30
-expect page 6
+expect page 9
 tap EDIT
 wait 30
-expect page 8
+expect page 12
 tap GLO
 wait 30
-expect page 9
-tap GLO
+expect page 14
+tap EDIT
 wait 30
-expect page 10
+expect page 12
 turn K1 1
 wait 30
 expect p44 1
-turn K2 2
+turn K3 2
 wait 30
 expect p45 3
 shot voice.png
@@ -75,7 +80,7 @@ turn K1 -1
 wait 30
 tap FX
 wait 30
-expect page 11
+expect page 15
 # the mod wheel (ALGO) and MIDI CC 1
 turn ALGO 8
 wait 30
@@ -166,7 +171,7 @@ wait 30
 tap ARP
 wait 30
 expect arp 1
-expect page 18
+expect page 22
 expect tempo 120
 key 7 down
 key 11 down
@@ -221,7 +226,7 @@ press ARP
 wait 600
 release ARP
 wait 30
-expect page 19
+expect page 23
 expect arp 2
 wait 30
 turn K3 1
@@ -253,8 +258,8 @@ press ARP
 wait 600
 release ARP
 wait 30
-expect page 19
-turn K1 30
+expect page 23
+turn K2 30
 wait 30
 expect tempo 150
 shot arp2.png
@@ -524,12 +529,12 @@ expect arpstate 0
 wait 600
 tap SEQ
 wait 30
-expect page 20
+expect page 24
 expect octave 0
 turn SELECT -1
 wait 30
-expect page 19
-turn K1 -30
+expect page 23
+turn K2 -30
 wait 30
 expect tempo 120
 tap SEQ
@@ -551,7 +556,7 @@ key 9 up
 wait 30
 tapkey 14
 wait 30
-expect page 20
+expect page 24
 expect seqlen 6
 expect sn1 60
 expect sn2 64
@@ -636,14 +641,16 @@ turn K1 -1
 wait 30
 expect sn2 64
 expect st5 1
-# the effects: FX pages TOUCH, DELAY, REVERB, FX 2; the delay's MIX up: a note's echo after it ends
+# the effects: FX pages DIST, CHORUS, DELAY, DELAY 2, REVERB, REVERB 2, COMP; the delay's MIX up: a note's echo after it ends
 tap HOME
 wait 30
 tap FX
 wait 30
 tap FX
 wait 30
-expect page 12
+tap FX
+wait 30
+expect page 17
 turn K4 64
 wait 30
 expect p55 64
@@ -660,7 +667,9 @@ turn K4 -64
 wait 30
 tap FX
 wait 30
-expect page 13
+tap FX
+wait 30
+expect page 19
 turn K4 64
 wait 30
 key 7 down
@@ -671,16 +680,39 @@ expect fxpeak >5
 turn K4 -64
 wait 100
 expect fxpeak 0
+tap HOME
+wait 30
 tap FX
 wait 30
-expect page 14
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 18
 shot fx2.png
 turn K2 1
 wait 30
 shot fx2pp.png
 turn K2 -1
-# FX ORDER (FX 2, K4): REV>DLY, both on: heard
-turn K4 1
+# FX ORDER (REVERB 2, K2): REV>DLY, both on: heard
+tap HOME
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 20
+turn K2 1
 wait 30
 expect p63 1
 tap HOME
@@ -689,8 +721,12 @@ tap FX
 wait 30
 tap FX
 wait 30
-expect page 12
+tap FX
+wait 30
+expect page 17
 turn K4 64
+wait 30
+tap FX
 wait 30
 tap FX
 wait 30
@@ -702,7 +738,7 @@ key 7 up
 wait 700
 expect fxpeak >1
 # the distortion, chorus, compressor: FX's pages DIST, CHORUS, COMP; inline on the main core (no block late)
-tap FX
+tap HOME
 wait 30
 tap FX
 wait 30
@@ -714,9 +750,23 @@ wait 30
 expect page 16
 turn K4 64
 wait 30
+tap HOME
+wait 30
 tap FX
 wait 30
-expect page 17
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 21
 turn K2 20
 wait 30
 shot comp.png
@@ -742,7 +792,7 @@ tap FX
 wait 30
 tap FX
 wait 30
-expect page 17
+expect page 21
 turn K2 -30
 wait 30
 tap HOME
@@ -751,7 +801,9 @@ tap FX
 wait 30
 tap FX
 wait 30
-expect page 12
+tap FX
+wait 30
+expect page 17
 turn K4 -64
 wait 30
 tap HOME
@@ -762,18 +814,14 @@ tap FX
 wait 30
 tap FX
 wait 30
-expect page 13
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 19
 turn K4 -64
 wait 30
 tap HOME
-wait 30
-tap FX
-wait 30
-tap FX
-wait 30
-tap FX
-wait 30
-tap FX
 wait 30
 tap FX
 wait 30
@@ -783,14 +831,6 @@ expect page 16
 turn K4 -64
 wait 30
 tap HOME
-wait 30
-tap FX
-wait 30
-tap FX
-wait 30
-tap FX
-wait 30
-tap FX
 wait 30
 tap FX
 wait 30
@@ -812,7 +852,9 @@ tap FX
 wait 30
 tap FX
 wait 30
-expect page 12
+tap FX
+wait 30
+expect page 17
 turn K4 64
 wait 2000
 tapkey 7

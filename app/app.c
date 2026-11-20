@@ -2,10 +2,11 @@
  * MB-1 for the M-VAVE FM-1 (an fm1-base app; started from fm1-base's template, MPL-2.0, and laid out after
  * sq80-fm1's app): one monophonic Minibrute-style voice (mbvoice/, measured against the MiniBrute V plugin).
  *
- * The panel: K1..K4 turn the four parameters of the page on screen. The page buttons pick a page, a second press
- * its second page: HOME the filter (FILTER, FILTER 2), SEL the oscillators (OSC, OSC 2), ENV the envelopes
- * (FILT ENV, AMP ENV), LFO the LFO and vibrato, EDIT the performance controls (glide, vintage, the wheel), GLO the
- * rest (MORE: sub octave and shape, Ultrasaw rate, level; VOICE: legato or retrig, bend range, LFO retrigger), FX the touch (aftertouch, PW and Metalizer envelope). SELECT
+ * The panel: K1..K4 turn the four parameters of the page on screen. Each page button is a section of the patch
+ * editor's sheet, its pages that section's columns (PAGE[] below): HOME the filter, SEL the oscillators (a page a
+ * waveform), ENV the envelopes and velocity, LFO the LFO and vibrato, EDIT playing (legato, glide, bend, vintage; the
+ * wheel and aftertouch), GLO the instrument's own settings, FX the effects in their order. A press: its first page, then
+ * the next; held half a second, back to its first. SELECT
  * steps through every page. ALGO is the mod wheel (MIDI CC 1 too); the keys' pressure is aftertouch. PRESET picks
  * one of 128 patch slots, four banks of 32, A01 .. D32 (the first 8 hold factory sounds until saved over), SAVE stores the patch in the slot,
  * OCT- / OCT+ the octave. Every parameter has a MIDI CC (PARAM[].cc), so a controller or a DAW can play them.
@@ -27,19 +28,23 @@ typedef struct {
     const char *title;
     uint8_t btn, p[4];
 } page_t;
+/* each button a section of the patch sheet (app/editor), each page one of its columns or groups; GLO the
+ * instrument's own settings (not the patch's) */
 static const page_t PAGE[] = {
-    {"FILTER", B_HOME, {P_CUT, P_RES, P_BRUTE, P_FENV}},     {"FILTER 2", B_HOME, {P_MODE, P_KBD, P_FVEL, P_AVEL}},
-    {"OSC", B_SEL, {P_SAW, P_SQR, P_TRI, P_SUB}},            {"OSC 2", B_SEL, {P_NOISE, P_ULTRA, P_PW, P_METAL}},
-    {"FILT ENV", B_ENV, {P_FA, P_FD, P_FS, P_FR}},           {"AMP ENV", B_ENV, {P_AA, P_AD, P_AS, P_AR}},
-    {"LFO", B_LFO, {P_LRATE, P_LWAVE, P_LPITCH, P_LFILT}},   {"LFO 2", B_LFO, {P_LPWM, P_LAMP, P_VRATE, P_VTYPE}},
-    {"PERFORM", B_EDIT, {P_GLIDE, P_VINT, P_WDEST, P_WAMT}}, {"MORE", B_GLO, {P_SUBOCT, P_SUBSHP, P_USRATE, P_LEVEL}},
-    {"VOICE", B_GLO, {P_PLAY, P_BEND, P_LRTRG, P_NONE}},
-    {"TOUCH", B_FX, {P_ATVIB, P_ATCUT, P_PWENV, P_MTENV}},
-    {"DELAY", B_FX, {P_DTIME, P_DFB, P_DTONE, P_DMIX}},      {"REVERB", B_FX, {P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX}},
-    {"FX 2", B_FX, {P_DSYNC, P_DMODE, P_RPRE, P_FXORD}},
+    {"FILTER", B_HOME, {P_CUT, P_RES, P_BRUTE, P_LEVEL}},     {"FILTER 2", B_HOME, {P_MODE, P_FENV, P_KBD, P_NONE}},
+    {"SAW", B_SEL, {P_SAW, P_ULTRA, P_USRATE, P_NONE}},       {"SQUARE", B_SEL, {P_SQR, P_PW, P_PWENV, P_NONE}},
+    {"TRI", B_SEL, {P_TRI, P_METAL, P_MTENV, P_NONE}},        {"SUB", B_SEL, {P_SUB, P_SUBSHP, P_SUBOCT, P_NOISE}},
+    {"FILT ENV", B_ENV, {P_FA, P_FD, P_FS, P_FR}},            {"AMP ENV", B_ENV, {P_AA, P_AD, P_AS, P_AR}},
+    {"VELOCITY", B_ENV, {P_FVEL, P_AVEL, P_NONE, P_NONE}},
+    {"LFO", B_LFO, {P_LRATE, P_LWAVE, P_LRTRG, P_NONE}},      {"LFO AMT", B_LFO, {P_LPITCH, P_LFILT, P_LPWM, P_LAMP}},
+    {"VIBRATO", B_LFO, {P_VRATE, P_VTYPE, P_NONE, P_NONE}},
+    {"PLAY", B_EDIT, {P_PLAY, P_GLIDE, P_BEND, P_VINT}},      {"CONTROLS", B_EDIT, {P_WDEST, P_WAMT, P_ATVIB, P_ATCUT}},
+    {"GLOBAL", B_GLO, {G_TEMPO, G_HORD, G_LSYNC, P_NONE}},
     {"DIST", B_FX, {P_XTYPE, P_XDRV, P_XTONE, P_XMIX}},       {"CHORUS", B_FX, {P_CRATE, P_CDEPTH, P_CPHASE, P_CMIX}},
+    {"DELAY", B_FX, {P_DTIME, P_DFB, P_DTONE, P_DMIX}},       {"DELAY 2", B_FX, {P_DSYNC, P_DMODE, P_NONE, P_NONE}},
+    {"REVERB", B_FX, {P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX}},   {"REVERB 2", B_FX, {P_RPRE, P_FXORD, P_NONE, P_NONE}},
     {"COMP", B_FX, {P_KTHR, P_KRAT, P_KATT, P_KREL}},
-    {"ARP", B_ARP, {P_AMODE, P_AOCT, P_ASTEP, P_ASWING}},   {"ARP 2", B_ARP, {G_TEMPO, P_ARP, G_HORD, G_LSYNC}},
+    {"ARP", B_ARP, {P_AMODE, P_AOCT, P_ASTEP, P_ASWING}},    {"ARP 2", B_ARP, {P_ARP, G_TEMPO, G_HORD, P_NONE}},
     {"SEQ", B_SEQ, {G_SPAT, G_SLEN, G_SSTEP, G_SSWING}},
 };
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
@@ -1077,6 +1082,7 @@ static void tap_tempo(void)                 /* SEQ held, PLAY tapped: the tempo 
 
 static uint32_t arp_down_ms;
 static uint8_t arp_long;
+static uint32_t pg_btn = 0xFFu, pg_down_ms;   /* a page button held: back to its first page after 500 ms */
 
 /* the sequencer from the panel: PLAY starts and stops it, REC arms recording (stopped: step entry, a key a step,
  * FX a rest, FX with a key held a tie; playing: in time). A pattern recorded step by step is as long as its steps. */
@@ -1202,8 +1208,20 @@ static void input(void)
         else if (k == B_FX && seq_rec && !seq_running)   /* step entry: a rest, or with a key held a tie */
             seq_step_write(keys && seq_key_note >= 0 ? (uint32_t)seq_key_note : 60u, 0,
                            keys && seq_key_note >= 0 ? SF_TIE : 0u);
-        else
+        else {
             page_button(k);
+            pg_btn = k;
+            pg_down_ms = plat_ms();
+        }
+    }
+    if (pg_btn < NB && (btn & 1u << pg_btn) && plat_ms() - pg_down_ms >= 500u) {   /* held: its first page */
+        for (k = 0; k < NPAGE && PAGE[k].btn != pg_btn; k++)
+            ;
+        if (k < NPAGE && k != set.page)
+            page_show(k);
+        pg_btn = 0xFFu;
+    } else if (pg_btn < NB && !(btn & 1u << pg_btn)) {
+        pg_btn = 0xFFu;
     }
     if (seq_wrote) {                         /* recorded in time (the audio side) */
         seq_wrote = 0;
@@ -1426,8 +1444,17 @@ static void draw(void)
     /* the page: its title, and its four parameters (K1..K4), lit a moment after a turn */
     cv_begin(240, 136, C_BLACK);
     cv_text(8, 0, &FONT_XS, pg->title, C_ACCENT);
-    for (i = 0; i < NPAGE; i++)              /* where the page is among them */
-        cv_rect(108 + (int32_t)i * 6, 4, 4, 4, i == set.page ? C_ACCENT : C_LINE);
+    {   /* where the page is among its button's: a dot each, right-aligned */
+        uint32_t n = 0, at = 0;
+        for (i = 0; i < NPAGE; i++)
+            if (PAGE[i].btn == pg->btn) {
+                if (i == set.page)
+                    at = n;
+                n++;
+            }
+        for (i = 0; i < n; i++)
+            cv_rect(232 - (int32_t)(n - i) * 10, 3, 6, 6, i == at ? C_ACCENT : C_LINE);
+    }
     if (seq_running || seq_rec) {            /* the sequencer: the step playing (or the next to enter) */
         const seqpat_t *pt = seq_pat();
         char o[8];
