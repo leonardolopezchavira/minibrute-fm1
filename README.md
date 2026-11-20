@@ -9,6 +9,9 @@ out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
   octaves) and noise; a resonant 12 dB LP / BP / HP / notch filter with Brute Factor, key tracking and self-oscillation;
   filter and amp ADSRs; an LFO (six waves) to pitch, filter, PWM/Metalizer and amp; vibrato; the mod wheel to LFO
   amount, vibrato or cutoff; aftertouch; glide; vintage drift.
+- **Performance:** an arpeggiator after the Minibrute's (saved with each patch), and a 64-step sequencer after the
+  KeyStep's with 8 patterns (step entry and recording in time; notes, velocity, rests, ties), on one clock: tempo,
+  tap tempo or MIDI clock.
 - **The panel:** see [the manual](app/docs/MANUAL.md).
 
 | Path | What |

@@ -23,7 +23,9 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | SAVE | Stores the patch in its slot, and the settings (lit when there is something to save) |
 | OCT- / OCT+ | The keyboard's octave, -2..+2 |
 | ARP | The arpeggiator: OFF, ON, HOLD in turn (and its page). Held half a second: its pages, ARP and ARP 2. Lit while it runs, dark a moment on each beat |
-| PLAY | Tap tempo: tap it on the beat |
+| SEQ | The sequencer's page |
+| PLAY | The sequencer: start (from the first step) and stop. Lit while it plays, dark a moment on each beat. With SEQ held: tap tempo, tap it on the beat |
+| REC | Arms recording into the sequencer: stopped, step by step; playing, in time. Lit while armed |
 | The keys | Notes with velocity; pressing harder is aftertouch |
 
 ## The pages
@@ -44,6 +46,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | TOUCH | FX | AT VIB | AT CUT | PW ENV | MTL ENV |
 | ARP | ARP | MODE | OCTAVE | STEP | SWING |
 | ARP 2 | ARP (held) | TEMPO | ARP | HOLD ORD | LFO CLK |
+| SEQ | SEQ | PATTERN | LENGTH | STEP | SWING |
 
 Notes on a few of them:
 
@@ -74,7 +77,7 @@ After the Minibrute's. ARP steps through OFF, ON and HOLD:
 - **OCTAVE**: over 1 to 4 octaves.
 - **STEP**: 1/4, 1/8, 1/16, or their triplets 1/4T, 1/8T, 1/16T.
 - **SWING**: 50 % (straight) to 75 % in six steps: every second note comes later.
-- **TEMPO** (ARP 2): 30 to 260 BPM; or tap PLAY on the beat. When MIDI clock comes in (USB, Bluetooth or TRS),
+- **TEMPO** (ARP 2): 30 to 260 BPM; or hold SEQ and tap PLAY on the beat. When MIDI clock comes in (USB, Bluetooth or TRS),
   the arpeggiator follows it, and TEMPO at its lowest halves it, at its highest doubles it.
 - **LFO CLK** (ARP 2): ARP puts the LFO on the arpeggiator's tempo; LFO RATE then picks a note value (8 bars
   dotted .. a 64th triplet), as the plugin's synced LFO.
@@ -82,6 +85,26 @@ After the Minibrute's. ARP steps through OFF, ON and HOLD:
 Each note sounds for half its step. As in the plugin, the arpeggiator is the patch's: ARP (OFF, ON or HOLD), MODE,
 OCTAVE, STEP and SWING are saved with it, so picking a patch can switch the arpeggiator on. TEMPO, HOLD ORD and
 LFO CLK belong to the instrument (one tempo for every patch).
+
+## The sequencer
+
+A 64-step monophonic step sequencer, after the KeyStep's (as on the MiniBrute 2), with 8 patterns. Each step is a
+note with its velocity, a rest, or a tie (the note before goes on through it). It runs on the arpeggiator's clock:
+TEMPO, a tap (SEQ held + PLAY), or MIDI clock (USB, Bluetooth or TRS) while it comes; the LFO follows it too with
+LFO CLK on ARP.
+
+- **The SEQ page**: **PATTERN** 1..8, **LENGTH** 1..64 steps, **STEP** (1/4 .. 1/16T) and **SWING** (50..75 %), its own
+  (not the arpeggiator's). A pattern changed while it plays takes over at the next step.
+- **PLAY** starts it from the first step and stops it. While it plays, the arpeggiator rests and the keys play over
+  it. MIDI Start, Continue and Stop run it too when the patch's arpeggiator is off.
+- **Step entry**: stopped, press **REC** (lit; the screen shows REC and the step). Each key writes a step and moves on;
+  **FX** writes a rest; holding the key and pressing **FX** writes a tie (the note goes on through that step). The
+  pattern is as long as the steps entered (LENGTH changes it later). Press REC again to finish.
+- **Recording in time**: while it plays, press **REC**. A key goes to the nearest step (the one playing, or the next
+  if it is more than half over); held over the steps after, it writes ties. Press REC again to finish.
+
+Each note sounds for half its step, or on through its ties. The patterns are stored by themselves (a couple of
+seconds after a change, while stopped; SAVE also stores them) and kept over power-off.
 
 ## The patches
 

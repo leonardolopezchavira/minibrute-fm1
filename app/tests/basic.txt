@@ -519,3 +519,120 @@ sysex F0 7D 4D 42 04 00 F7
 wait 30
 expect arp 0
 expect arpstate 0
+
+# the sequencer: SEQ its page; REC stopped: step entry (a key a step, FX a rest, a key held + FX a tie)
+wait 600
+tap SEQ
+wait 30
+expect page 14
+expect octave 0
+turn SELECT -1
+wait 30
+expect page 13
+turn K1 -30
+wait 30
+expect tempo 120
+tap SEQ
+wait 30
+tap REC
+wait 30
+expect seqrec 1
+tapkey 7
+wait 30
+tapkey 11
+wait 30
+tap FX
+wait 30
+key 9 down
+wait 30
+tap FX
+wait 30
+key 9 up
+wait 30
+tapkey 14
+wait 30
+expect page 14
+expect seqlen 6
+expect sn1 60
+expect sn2 64
+expect sv3 0
+expect st3 0
+expect sn4 62
+expect st5 1
+expect sn5 62
+expect sn6 67
+shot seq_rec.png
+tap REC
+wait 30
+expect seqrec 0
+expect seqdirty 0
+# PLAY: 1/16 steps at 120 BPM (125 ms); a note half its step, a tie on through, a rest
+tap PLAY
+wait 10
+expect seqrun 1
+expect seqlast 60
+wait 125
+expect seqlast 64
+wait 125
+expect note -1
+wait 125
+expect seqlast 62
+expect note 62
+wait 70
+expect note 62
+wait 125
+expect seqlast 67
+shot seq_play.png
+tap PLAY
+wait 30
+expect seqrun 0
+expect note -1
+# REC while it plays: pattern 2 (empty), C4 held over steps: one note, then ties
+turn K1 1
+wait 30
+expect seqlen 16
+expect seqnotes 0
+tap PLAY
+wait 200
+tap REC
+wait 30
+expect seqrec 1
+key 7 down
+wait 450
+key 7 up
+wait 300
+tap REC
+wait 30
+tap PLAY
+wait 30
+expect seqrun 0
+expect seqnotes 1
+expect seqties >1
+expect seqties <5
+# the arpeggiator rests while the sequencer plays; MIDI start / stop (the arpeggiator off) run it
+midi FA
+wait 100
+expect seqrun 1
+midi FC
+wait 30
+expect seqrun 0
+# SEQ held + PLAY: a tap of the tempo (not the transport)
+press SEQ
+tap PLAY
+wait 420
+tap PLAY
+wait 30
+release SEQ
+wait 30
+expect seqrun 0
+expect tempo >110
+expect tempo <135
+# kept over a restart
+wait 2500
+expect seqdirty 0
+reboot
+wait 100
+turn K1 -1
+wait 30
+expect sn2 64
+expect st5 1

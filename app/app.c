@@ -17,9 +17,7 @@
 #include "mb_tapers.h"
 
 #define C_ACCENT RGB(240, 96, 40)       /* the highlight: Minibrute orange */
-#ifndef MB_SEQ
-#define MB_SEQ 0                         /* the step sequencer (0.9: in the making) */
-#endif
+
 
 /* ------------------------------------------------------------- parameters --- */
 enum { T_LVL, T_BIP, T_KBD, T_CUT, T_ATT, T_DR, T_LFO, T_PW, T_USR, T_VIB, T_GLIDE, T_DB, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
@@ -115,9 +113,7 @@ static const page_t PAGE[] = {
     {"VOICE", B_GLO, {P_PLAY, P_BEND, P_LRTRG, P_NONE}},
     {"TOUCH", B_FX, {P_ATVIB, P_ATCUT, P_PWENV, P_MTENV}},
     {"ARP", B_ARP, {P_AMODE, P_AOCT, P_ASTEP, P_ASWING}},   {"ARP 2", B_ARP, {G_TEMPO, P_ARP, G_HORD, G_LSYNC}},
-#if MB_SEQ
     {"SEQ", B_SEQ, {G_SPAT, G_SLEN, G_SSTEP, G_SSWING}},
-#endif
 };
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
 
@@ -218,6 +214,7 @@ typedef struct {
 } seqbank_t;
 static seqbank_t sq;
 static uint8_t sq_dirty;                 /* changed since stored */
+static uint32_t sq_changed_ms;
 
 static uint32_t pget(uint32_t i)
 {
@@ -325,7 +322,7 @@ static uint8_t par_ix;
 static volatile uint32_t par_posted, par_done;
 
 /* the main loop's events for the audio interrupt: one writer (the main loop), one reader (app_render) */
-enum { Q_ON, Q_OFF, Q_PAR, Q_WHEEL, Q_AT, Q_ALLOFF, Q_ARP };
+enum { Q_ON, Q_OFF, Q_PAR, Q_WHEEL, Q_AT, Q_ALLOFF, Q_ARP, Q_SEQ };
 #define NEV 64u
 static volatile uint32_t ev_q[NEV];
 static volatile uint32_t ev_w, ev_r;
@@ -489,9 +486,119 @@ static void arp_event(void)                  /* the next note's start, or the so
     arp.due = len / 2u;
 }
 
+/* ------------------------------------------------------------ the sequencer --- */
+/* Plays the pattern (sq, G_SPAT) on the arpeggiator's clock (TEMPO, a tap, MIDI clock), at its own STEP and SWING.
+ * A step: a note (it sounds half the step, or on into a tie), a rest, or a tie (the note before goes on). While it
+ * plays the arpeggiator rests and the keys play over it; REC armed, they are recorded, each to the nearest step
+ * (a key held over steps: ties). In the audio interrupt, as the arpeggiator. */
+static struct {
+    uint8_t run, phase;                      /* phase 1: the step's note ends next */
+    uint32_t due, len, el;                   /* samples to the next event; the step's length; samples into it */
+    uint32_t pos, cur;                       /* the next step; the step playing */
+    int32_t sounding, last;                  /* the note it sounds; the last it played (the host's checks) */
+    int32_t rec_note;                        /* REC: the key held, recorded at rec_at */
+    uint32_t rec_at;
+} seq = {.sounding = -1, .last = -1, .rec_note = -1};
+static volatile uint8_t seq_rec;             /* REC armed (the main loop's) */
+static volatile uint8_t seq_running;         /* seq.run, for the main loop */
+static volatile uint8_t seq_wrote;           /* the audio side recorded a step (the main loop: stored later) */
+static volatile uint32_t seq_cur_now;        /* the step playing, for the screen */
+
+static seqpat_t *seq_pat(void) { return &sq.pat[set.g[G_SPAT - NP] % NPAT]; }
+static uint32_t seq_len(const seqpat_t *pt) { return pt->len < 1u ? 1u : pt->len > NSTEP ? NSTEP : pt->len; }
+
+static void seq_sound(int32_t note, uint32_t vel)
+{
+    if (seq.sounding >= 0)
+        mb_note_off(&voice, (int)seq.sounding);
+    seq.sounding = note;
+    if (note >= 0) {
+        seq.last = note;
+        mb_note_on(&voice, (int)note, (int)(vel ? vel : 1u));
+    }
+    voice_note = voice.gate ? (int32_t)voice.note : -1;
+}
+
+static void seq_transport(uint32_t how)      /* 0 stop, 1 start (from the first step), 2 continue */
+{
+    if (how == 0u) {
+        seq_sound(-1, 0);
+        seq.run = 0;
+        seq.rec_note = -1;
+    } else {
+        arp_stop();                          /* (the arpeggiator rests while the sequencer plays) */
+        seq_sound(-1, 0);
+        if (how == 1u)
+            seq.pos = 0;
+        seq.run = 1;
+        seq.phase = 0;
+        seq.due = 0;
+    }
+    seq_running = seq.run;
+}
+
+static void seq_event(void)                  /* a step's start, or its note's end */
+{
+    seqpat_t *pt = seq_pat();
+    uint32_t L = seq_len(pt), c, nx;
+    int hold;
+    if (seq.phase) {                         /* the note's end; the rest of the step */
+        seq_sound(-1, 0);
+        seq.phase = 0;
+        seq.due = seq.len - seq.len / 2u;
+        return;
+    }
+    if (seq.pos >= L)
+        seq.pos = 0;
+    c = seq.cur = seq.pos;
+    seq_cur_now = c;
+    seq.len = step_len(c, set.g[G_SSTEP - NP], set.g[G_SSWING - NP]);
+    seq.el = 0;
+    if (seq_rec && seq.rec_note >= 0 && c != seq.rec_at) {   /* REC, a key still held: a tie */
+        pt->note[c] = (uint8_t)seq.rec_note;
+        pt->flag[c] = SF_TIE;
+        seq_wrote = 1;
+    }
+    if ((pt->flag[c] & SF_TIE) && seq.sounding >= 0)
+        ;                                    /* a tie: the note goes on */
+    else if (pt->vel[c] && !(pt->flag[c] & SF_TIE))
+        seq_sound((int32_t)pt->note[c], pt->vel[c]);
+    else
+        seq_sound(-1, 0);                    /* a rest (or a tie after one) */
+    nx = (c + 1u) % L;
+    hold = (pt->flag[nx] & SF_TIE) || (seq_rec && seq.rec_note >= 0);
+    seq.pos = nx;
+    if (seq.sounding >= 0 && !hold) {
+        seq.phase = 1;
+        seq.due = seq.len / 2u;
+    } else {
+        seq.due = seq.len;
+    }
+}
+
+static void seq_record(uint32_t note, uint32_t vel)   /* REC while it plays: a key to the nearest step */
+{
+    seqpat_t *pt = seq_pat();
+    uint32_t L = seq_len(pt), at;
+    if (!vel) {
+        if ((int32_t)note == seq.rec_note)
+            seq.rec_note = -1;
+        return;
+    }
+    at = seq.el < seq.len / 2u ? seq.cur : (seq.cur + 1u) % L;
+    pt->note[at] = (uint8_t)note;
+    pt->vel[at] = (uint8_t)vel;
+    pt->flag[at] = 0;
+    seq.rec_note = (int32_t)note;
+    seq.rec_at = at;
+    seq_wrote = 1;
+}
+
 static void note_in(uint32_t note, uint32_t vel)   /* audio interrupt: a key or a MIDI note (vel 0: up) */
 {
-    if (arp.state != 0u) {
+    if (seq.run && seq_rec)
+        seq_record(note, vel);
+    if (arp.state != 0u && !seq.run) {
         arp_key(note, vel);
         return;
     }
@@ -515,8 +622,12 @@ static void events(void)                     /* audio interrupt */
         case Q_OFF:
             note_in(a, 0);
             break;
+        case Q_SEQ:
+            seq_transport(a);
+            break;
         case Q_ARP:                          /* the arpeggiator switched (a = the new state) */
             arp_stop();
+            seq.sounding = -1;
             mb_all_off(&voice);
             voice_note = -1;
             arp.state = (uint8_t)a;
@@ -538,6 +649,7 @@ static void events(void)                     /* audio interrupt */
             break;
         case Q_ALLOFF:
             arp_stop();
+            seq.sounding = -1;
             mb_all_off(&voice);
             voice_note = -1;
             break;
@@ -580,6 +692,18 @@ static void midi_in(void)                    /* audio interrupt */
             arp.pos = 0;
             if (arp.n && !arp.gate)
                 arp.due = 0;
+            if (arp.state == 0u)             /* (the arpeggiator off: the sequencer starts) */
+                seq_transport(1);
+            continue;
+        }
+        if (st == 0xFBu) {                   /* continue */
+            arp.clk_ticks = 0;
+            if (arp.state == 0u)
+                seq_transport(2);
+            continue;
+        }
+        if (st == 0xFCu) {                   /* stop */
+            seq_transport(0);
             continue;
         }
         if (st >= 0xF8u)
@@ -636,7 +760,14 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         uint32_t off = 0, guard = 0;
         while (off < n && guard++ < 64u) {
             uint32_t m = n - off;
-            if (arp.state != 0u && arp.n) {
+            int ar = arp.state != 0u && arp.n && !seq.run;
+            if (seq.run) {
+                if (seq.due == 0u)
+                    seq_event();
+                if (seq.due < m)
+                    m = seq.due;
+            }
+            if (ar) {
                 if (arp.due == 0u)
                     arp_event();
                 if (arp.due < m)
@@ -645,7 +776,11 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             if (m) {
                 mb_render(&voice, buf + off, (int)m);
                 off += m;
-                if (arp.state != 0u && arp.n)
+                if (seq.run) {
+                    seq.due -= m;
+                    seq.el += m;
+                }
+                if (ar)
                     arp.due -= m;
             }
         }
@@ -764,6 +899,19 @@ void app_init(void)
         if (set.g[j] > pmax(NP + j))
             set.g[j] = G_DEF[j];
     arp.state = arp_posted = set.cur.v[P_ARP];   /* (as the patch has it) */
+    if (plat_store_load(OBJ_SEQ, &sq, sizeof sq) != (int)sizeof sq || sq.magic != SEQ_MAGIC) {
+        sq.magic = SEQ_MAGIC;                /* empty patterns of 16 steps */
+        for (i = 0; i < NPAT; i++) {
+            sq.pat[i].len = 16;
+            for (j = 0; j < NSTEP; j++) {
+                sq.pat[i].note[j] = 60;
+                sq.pat[i].vel[j] = 0;
+                sq.pat[i].flag[j] = 0;
+            }
+        }
+    }
+    for (i = 0; i < NPAT; i++)
+        sq.pat[i].len = (uint8_t)seq_len(&sq.pat[i]);
     params_from(set.cur.v, &voice.p);
     mb_init(&voice, 44100.0f);
     params_post();
@@ -1096,6 +1244,7 @@ static void param_set(uint32_t i, int32_t v)
     if (i == G_SLEN) {                       /* the pattern's length (kept with the sequences) */
         sq.pat[set.g[G_SPAT - NP] % NPAT].len = (uint8_t)(v + 1);
         sq_dirty = 1;
+        sq_changed_ms = plat_ms();
         ui.redraw = 1;
         return;
     }
@@ -1143,8 +1292,10 @@ static void save(void)
     char t[16];
     bank.slot[set.slot] = set.cur;
     set.edited = 0;
-    if (plat_store_save(OBJ_BANK, &bank, sizeof bank) == 0 && plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0) {
+    if (plat_store_save(OBJ_BANK, &bank, sizeof bank) == 0 && plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 &&
+        (!sq_dirty || plat_store_save(OBJ_SEQ, &sq, sizeof sq) == 0)) {
         set_dirty = 0;
+        sq_dirty = 0;
         name_text(&set.cur, t);
         app_say("SAVED", t);
     } else {
@@ -1167,7 +1318,7 @@ static void octave_step(int32_t d)
     app_say("OCTAVE", t);
 }
 
-static void tap_tempo(void)                 /* PLAY tapped: the tempo from the last taps */
+static void tap_tempo(void)                 /* SEQ held, PLAY tapped: the tempo from the last taps */
 {
     static uint32_t last, avg;
     uint32_t now = plat_ms(), d = now - last;
@@ -1187,6 +1338,79 @@ static void tap_tempo(void)                 /* PLAY tapped: the tempo from the l
 static uint32_t arp_down_ms;
 static uint8_t arp_long;
 
+/* the sequencer from the panel: PLAY starts and stops it, REC arms recording (stopped: step entry, a key a step,
+ * FX a rest, FX with a key held a tie; playing: in time). A pattern recorded step by step is as long as its steps. */
+static uint32_t seq_edit;                    /* step entry: the next step */
+static uint8_t seq_entered;                  /* steps entered since REC */
+static int32_t seq_key_note = -1;            /* step entry: the last key's note (FX with it held: a tie) */
+static void seq_say_step(const char *what, uint32_t i)
+{
+    char t[12];
+    int_text((int32_t)i + 1, t);
+    app_say(what, t);
+}
+
+static void seq_step_write(uint32_t note, uint32_t vel, uint32_t flag)   /* step entry: one step, the next */
+{
+    seqpat_t *pt = seq_pat();
+    uint32_t e = seq_edit % NSTEP;
+    pt->note[e] = (uint8_t)note;
+    pt->vel[e] = (uint8_t)vel;
+    pt->flag[e] = (uint8_t)flag;
+    if (seq_entered < NSTEP)
+        seq_entered++;
+    pt->len = seq_entered;
+    seq_edit = (e + 1u) % NSTEP;
+    sq_dirty = 1;
+    sq_changed_ms = plat_ms();
+    seq_say_step(flag & SF_TIE ? "TIE" : vel ? "STEP" : "REST", e);
+    ui.redraw = 1;
+}
+
+static void seq_store(void)
+{
+    if (plat_store_save(OBJ_SEQ, &sq, sizeof sq) == 0)
+        sq_dirty = 0;
+}
+
+static void rec_button(void)
+{
+    seq_rec = (uint8_t)!seq_rec;
+    if (seq_rec) {
+        if (!seq_running) {                  /* step entry from the first step */
+            seq_edit = 0;
+            seq_entered = 0;
+            seq_key_note = -1;
+            app_say("STEP REC", "STEP 1");
+        } else {
+            app_say("REC", "ON");
+        }
+        if (PAGE[set.page].btn != B_SEQ)
+            page_button(B_SEQ);
+    } else {
+        app_say("REC", "OFF");
+        if (sq_dirty && !seq_running)
+            seq_store();
+    }
+}
+
+static void play_button(uint32_t btn)
+{
+    if (btn & 1u << B_SEQ) {                 /* SEQ held: a tap of the tempo */
+        tap_tempo();
+        return;
+    }
+    if (seq_running) {
+        post(Q_SEQ, 0, 0);
+        seq_running = 0;
+        app_say("SEQ", "STOP");
+    } else {
+        post(Q_SEQ, 1, 0);
+        seq_running = 1;
+        seq_say_step("PATTERN", set.g[G_SPAT - NP]);
+    }
+}
+
 static void input(void)
 {
     uint32_t keys, btn = plat_buttons(), k, at = 0;
@@ -1199,6 +1423,10 @@ static void input(void)
         if ((keys & bit) && !(ui.keys & bit)) {
             v = touch_vel(k);
             ui.vel[k] = (uint8_t)v;
+            if (seq_rec && !seq_running) {   /* step entry: the key's note */
+                seq_step_write((uint32_t)note, v ? v : 1u, 0);
+                seq_key_note = note;
+            }
             post(Q_ON, (uint32_t)note, v);
             plat_midi_send(0x09u | 0x90u << 8 | (uint32_t)note << 16 | v << 24, TO_USB | TO_BLE);
         } else if (!(keys & bit) && (ui.keys & bit)) {
@@ -1228,10 +1456,22 @@ static void input(void)
             arp_down_ms = plat_ms();
             arp_long = 0;
         } else if (k == B_PLAY)
-            tap_tempo();
+            play_button(btn);
+        else if (k == B_REC)
+            rec_button();
+        else if (k == B_FX && seq_rec && !seq_running)   /* step entry: a rest, or with a key held a tie */
+            seq_step_write(keys && seq_key_note >= 0 ? (uint32_t)seq_key_note : 60u, 0,
+                           keys && seq_key_note >= 0 ? SF_TIE : 0u);
         else
             page_button(k);
     }
+    if (seq_wrote) {                         /* recorded in time (the audio side) */
+        seq_wrote = 0;
+        sq_dirty = 1;
+        sq_changed_ms = plat_ms();
+    }
+    if (sq_dirty && !seq_rec && !seq_running && plat_ms() - sq_changed_ms > 2000u)   /* (LENGTH and the rest) */
+        seq_store();
     if ((btn & 1u << B_ARP) && !arp_long && plat_ms() - arp_down_ms >= 500u) {   /* ARP held: ARP / ARP 2 */
         arp_long = 1;
         page_button(B_ARP);
@@ -1320,8 +1560,15 @@ static void input(void)
             beat_seen = arp_beat;
             beat_ms = plat_ms();
         }
+        int dark = plat_ms() - beat_ms < 70u;
         if (set.cur.v[P_ARP])               /* the arpeggiator on: ARP lit, dark a moment on each beat */
-            lit = (plat_ms() - beat_ms < 70u) ? lit & ~(1u << B_ARP) : lit | 1u << B_ARP;
+            lit = dark ? lit & ~(1u << B_ARP) : lit | 1u << B_ARP;
+        if (seq_running)                     /* the sequencer: PLAY the same */
+            lit = dark ? lit & ~(1u << B_PLAY) : lit | 1u << B_PLAY;
+        if (seq_rec)
+            lit |= 1u << B_REC;
+        if (sq_dirty)
+            lit |= 1u << B_SAVE;
         plat_leds(lit, keys);
     }
 }
@@ -1374,7 +1621,19 @@ static void draw(void)
     cv_begin(240, 136, C_BLACK);
     cv_text(8, 0, &FONT_XS, pg->title, C_ACCENT);
     for (i = 0; i < NPAGE; i++)              /* where the page is among them */
-        cv_rect(130 + (int32_t)i * 8, 4, 6, 4, i == set.page ? C_ACCENT : C_LINE);
+        cv_rect(118 + (int32_t)i * 8, 4, 6, 4, i == set.page ? C_ACCENT : C_LINE);
+    if (seq_running || seq_rec) {            /* the sequencer: the step playing (or the next to enter) */
+        const seqpat_t *pt = seq_pat();
+        char o[8];
+        t[0] = 0;
+        text_cat(t, seq_rec ? "REC " : "SEQ ");
+        int_text((int32_t)(seq_running ? seq_cur_now : seq_edit) + 1, o);
+        text_cat(t, o);
+        text_cat(t, "/");
+        int_text((int32_t)seq_len(pt), o);
+        text_cat(t, o);
+        cv_text(64, 0, &FONT_XS, t, seq_rec ? C_ACCENT : C_HI);
+    }
     for (i = 0; i < 4u; i++) {
         uint32_t p = pg->p[i], v;
         int32_t x = 4 + (int32_t)(i % 2u) * 118, y = 18 + (int32_t)(i / 2u) * 58;
@@ -1452,6 +1711,13 @@ void app_frame(void)
         lit_until = 0;
         ui.redraw = 1;
     }
+    {
+        static uint32_t step_seen;
+        if (seq_running && seq_cur_now != step_seen) {
+            step_seen = seq_cur_now;
+            ui.redraw = 1;
+        }
+    }
     if (midi_count != last_midi) {
         last_midi = midi_count;
         ui.redraw = 1;
@@ -1493,6 +1759,28 @@ int app_expect(const char *what, int *got)
         *got = set.cur.v[P_ARP];
     else if (!strcmp(what, "arpstate"))     /* as the audio side has it */
         *got = arp.state;
+    else if (!strcmp(what, "seqrun"))
+        *got = seq.run;
+    else if (!strcmp(what, "seqrec"))
+        *got = seq_rec;
+    else if (!strcmp(what, "seqlast"))      /* the last note the sequencer played */
+        *got = seq.last;
+    else if (!strcmp(what, "seqlen"))
+        *got = (int)seq_len(seq_pat());
+    else if (!strcmp(what, "seqdirty"))
+        *got = sq_dirty;
+    else if (!strcmp(what, "seqnotes") || !strcmp(what, "seqties")) {   /* the pattern's notes, its ties */
+        const seqpat_t *pt = seq_pat();
+        uint32_t i, c = 0;
+        for (i = 0; i < seq_len(pt); i++)
+            c += what[3] == 'n' ? (pt->vel[i] && !(pt->flag[i] & SF_TIE)) : (pt->flag[i] & SF_TIE) != 0;
+        *got = (int)c;
+    }
+    else if (what[0] == 's' && (what[1] == 'n' || what[1] == 'v' || what[1] == 't') && what[2] >= '0' && what[2] <= '9') {
+        const seqpat_t *pt = seq_pat();      /* sn5 / sv5 / st5: step 5's note, velocity, tie (from 1) */
+        uint32_t i = ((uint32_t)atoi(what + 2) + NSTEP - 1u) % NSTEP;
+        *got = what[1] == 'n' ? pt->note[i] : what[1] == 'v' ? pt->vel[i] : (pt->flag[i] & SF_TIE) != 0;
+    }
     else if (!strcmp(what, "arplast"))      /* the last note the arpeggiator played */
         *got = arp.last;
     else if (!strcmp(what, "arpn"))         /* the notes in the arpeggiator */
