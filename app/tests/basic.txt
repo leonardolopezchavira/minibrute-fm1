@@ -701,7 +701,7 @@ wait 100
 key 7 up
 wait 700
 expect fxpeak >1
-# the distortion, chorus, compressor: FX's pages DIST, CHORUS, COMP; any on, all of the sound from the effects
+# the distortion, chorus, compressor: FX's pages DIST, CHORUS, COMP; inline on the main core (no block late)
 tap FX
 wait 30
 tap FX
@@ -799,7 +799,8 @@ expect p67 64
 wait 600
 key 7 down
 wait 200
-expect fxpeak >20
+expect outpeak >20
+expect fxpeak 0
 key 7 up
 wait 300
 # a short note into the delay alone: its repeat comes (0.11.0 dropped it when the note ended first)

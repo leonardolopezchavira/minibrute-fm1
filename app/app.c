@@ -382,7 +382,8 @@ static MBVoice voice;
  * on one core); the dry signal goes out at once, so only the effects are a block (5.8 ms) later */
 static MBFx fx;
 static int16_t fx_mem[MBFX_MEM] PLAT_POOL;
-static float fx_in[APP_BLOCK], fx_wl[APP_BLOCK], fx_wr[APP_BLOCK];
+static float out_peak;
+static float fx_in[APP_BLOCK], fx_wl[APP_BLOCK], fx_wr[APP_BLOCK], pre_l[APP_BLOCK], pre_r[APP_BLOCK];
 static uint32_t fx_n;                        /* fx_in's samples (the last block's voice) */
 static uint32_t fx_silent_n;                 /* samples the voice has been silent for */
 static MBFxParams fx_now;                    /* as the audio side has them */
@@ -869,16 +870,15 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     if (n > APP_BLOCK)
         n = APP_BLOCK;
     uint32_t fn = fx_n;
-    int fx_run = 0, on2 = 0, fx_full = 0;
+    int fx_run = 0, on2 = 0;
     float dry;
+    MBFxParams q = fx_now;
     events();
     midi_in();
     {   /* the last block's effects: handed to the second core (or done after the voice) */
-        MBFxParams q = fx_now;
         if (fx_beats_now > 0.0f)
             q.d_time_s = fx_beats_now * 60.0f / arp_tempo_now();
         dry = mbfx_dry_gain(&q);
-        fx_full = mbfx_full(&q);
         /* idle: the voice silent for longer than the delay's time (its first repeat still to come), and the effects
          * silent too: nothing to do */
         int silent = 1, quiet;
@@ -888,7 +888,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         quiet = silent && fx.alive < 1e-5f && (float)fx_silent_n > (q.d_mix > 0.001f ? q.d_time_s * 44100.0f : 0.0f) + 8820.0f;
         if (quiet)
             fx.d_on = 0;                     /* (the delay starts afresh when it is next heard) */
-        if (fn && !quiet && (fx_full || q.d_mix > 0.001f || q.r_mix > 0.001f || fx.d_on || fx.r_run)) {
+        if (fn && !quiet && (q.d_mix > 0.001f || q.r_mix > 0.001f || fx.d_on || fx.r_run)) {
             mbfx_set(&fx, &q);
             for (i = 0; i < fn; i++)
                 fx_wl[i] = fx_wr[i] = 0.0f;
@@ -947,19 +947,28 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     } else {
         fn = 0;
     }
+    /* the distortion and chorus here, on this core (no block late); the delay's and reverb's wet (a block late, as a
+     * send) added; the compressor last, on all of it */
+    mbfx_pre(&fx, &q, buf, pre_l, pre_r, (int)n);
     for (i = 0; i < n; i++) {
-        float y = buf[i], yl = fx_full ? 0.0f : dry * y, yr = yl;   /* (the distortion, chorus or compressor on: all of
-                                                                     * it from the effects, a block later) */
+        float yl = dry * pre_l[i], yr = dry * pre_r[i];
         if (i < fn) {
             yl += fx_wl[i];
             yr += fx_wr[i];
         }
-        yl = ceiling(yl);
-        yr = ceiling(yr);
+        fx_in[i] = 0.5f * (pre_l[i] + pre_r[i]);   /* (the next block's delay and reverb take this one) */
+        pre_l[i] = yl;
+        pre_r[i] = yr;
+    }
+    mbfx_comp(&fx, &q, pre_l, pre_r, (int)n);
+    out_peak = 0.0f;
+    for (i = 0; i < n; i++) {
+        float yl = ceiling(pre_l[i]), yr = ceiling(pre_r[i]);
+        if (fm_fabsf(yl) > out_peak)
+            out_peak = fm_fabsf(yl);
         lr[2u * i] = (int32_t)(yl * g);
         lr[2u * i + 1u] = (int32_t)(yr * g);
         scope_cap[(w + i) % SCOPE_N] = (int16_t)(0.5f * (yl + yr) * 32767.0f);
-        fx_in[i] = y;                        /* (the next block's effects take this one) */
     }
     fx_n = n;
     scope_w = w + n;
@@ -1998,6 +2007,8 @@ int app_expect(const char *what, int *got)
         *got = arp.state;
     else if (!strcmp(what, "fxcores"))
         *got = fx_cores;
+    else if (!strcmp(what, "outpeak"))     /* the last block out, the louder side, x1000 */
+        *got = (int)(out_peak * 1000.0f);
     else if (!strcmp(what, "fxpeak")) {    /* the last block's effects, the louder side, x1000 */
         float m = 0.0f;
         for (uint32_t i = 0; i < APP_BLOCK; i++) {

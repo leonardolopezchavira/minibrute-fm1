@@ -29,8 +29,8 @@ typedef struct {
     float r_mix;                          /* 0..1 (0: the reverb is off) */
     float r_pre_s;                        /* pre-delay, 0..0.2 s */
     uint32_t order;                       /* 0: delay, then reverb; 1: reverb, then delay */
-    /* in the signal itself (not sends): the distortion, the chorus (in that order, before the delay and reverb), the
-     * compressor (last). Any of them on: mbfx_full, and the whole signal comes out of mbfx_process */
+    /* in the signal itself (not sends, and not a block late: mbfx_pre and mbfx_comp, on the first core): the
+     * distortion, the chorus (in that order, before the delay and reverb), the compressor (last) */
     uint32_t x_type;                      /* 0 soft, 1 hard, 2 asymmetric, 3 fold */
     float x_drive_db, x_tone, x_mix;      /* 0..48 dB; 0..1 (a low-pass 1 k .. 20 kHz); 0..1 */
     float c_rate_hz, c_depth_ms, c_phase, c_mix;   /* the LFO; its sweep (ms, peak to peak); L/R 0..1 (half a cycle) */
@@ -65,7 +65,8 @@ void mbfx_init(MBFx *f, float sr, int16_t *mem);   /* mem: MBFX_MEM int16 sample
 void mbfx_set(MBFx *f, const MBFxParams *p);
 /* in: n mono samples; outL/outR: the wet part (added to, not overwritten) */
 void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n);
-int mbfx_full(const MBFxParams *p);   /* 1: the whole signal comes out of mbfx_process (outL/outR start at 0) */
+void mbfx_pre(MBFx *f, const MBFxParams *p, const float *in, float *l, float *r, int n);   /* distortion, chorus */
+void mbfx_comp(MBFx *f, const MBFxParams *p, float *l, float *r, int n);   /* the compressor, in place */
 float mbfx_dry_gain(const MBFxParams *p);   /* the dry signal's share (equal-power crossfades) */
 void mbfx_clear(MBFx *f);                    /* silence (the lines zeroed) */
 

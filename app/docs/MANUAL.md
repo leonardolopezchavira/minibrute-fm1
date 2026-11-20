@@ -122,8 +122,8 @@ the chorus, then the delay and reverb (FX ORDER), the compressor last.
 - **COMP**: **THRESH** -60 to +20 dB, **RATIO** OFF (1:1) to 100:1, **ATTACK**, **RELEASE**; its makeup gain is
   automatic. On when RATIO is above 1:1.
 
-With any of these on, the whole sound goes through the second core: it comes out a block (6 ms) later than with only
-the delay and reverb.
+These three run on the first core, in the sound itself, so they add no delay: the dry sound is never late. The
+distortion and chorus come before the delay and reverb (which hear them); the compressor comes last, on everything.
 
 ## The sequencer
 
