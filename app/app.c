@@ -1327,7 +1327,13 @@ static void input(void)
             lit |= 1u << B_REC;
         if (sq_dirty)
             lit |= 1u << B_SAVE;
-        plat_leds(lit, keys);
+        {   /* the unlit buttons and keys all glow (plat_leds lets only the buttons glow: the seven lowest keys then
+             * caught some of it, the others none; as sq80-fm1 does), PLAY green */
+            uint32_t on = lit, play = 1u << B_PLAY, dimb = ((1u << NB) - 1u) & ~on;
+            on = (on & ~play) | (on & play ? LED_PLAY_GREEN : 0u);
+            dimb = (dimb & ~play) | (dimb & play ? LED_PLAY_GREEN : 0u);
+            plat_lights(on, keys, dimb, ((1u << NKEYS) - 1u) & ~keys, 2);
+        }
     }
 }
 
