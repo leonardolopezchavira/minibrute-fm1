@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT
+     MB-1 for the FM-1: the front page (tools/make_home.py fills {{VERSION}} and {{PKG}}; tools/site_theme.py adds
+     the menu). Drawn as a Brute-line panel: grey, white sections with tabbed titles, black ink, one orange. Its
+     pictures: the FM-1's screen (the manual's) and a patch sheet out of the editor (app/site/img). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MB-1 · a MiniBrute-style synthesizer for the M-VAVE FM-1</title>
+<meta name="description" content="MB-1: an unofficial MiniBrute-style monophonic synthesizer for the M-VAVE FM-1, measured against the MiniBrute V plugin. Install it from the browser, edit its patches on a patch sheet.">
+<script>
+try { const t = localStorage.getItem("mb1-theme"); document.documentElement.dataset.theme = t || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch (e) { document.documentElement.dataset.theme = "light"; }
+</script>
+<style>
+  @font-face { font-family: "Barlow Condensed"; font-weight: 500; src: url("fonts/barlow-condensed-latin-500-normal.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Barlow Condensed"; font-weight: 600; src: url("fonts/barlow-condensed-latin-600-normal.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("fonts/barlow-condensed-latin-700-normal.woff2") format("woff2"); font-display: swap; }
+  :root, [data-theme="light"] { --page: #e9e9e7; --body: #c4c4c4; --face: #ffffff; --ink: #000000; --mute: #4f4f4f; --hi: #f06028; --hi-ink: #b23a0c; color-scheme: light; }
+  [data-theme="dark"] { --page: #0b0b0b; --body: #3b3b3b; --face: #000000; --ink: #ffffff; --mute: #a6a6a6; --hi: #f06028; --hi-ink: #ff8a57; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html body.home { margin: 0; background: var(--page); color: var(--ink); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .cond, h1, h2, h3, .tab, .btn, .k { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--ink); text-decoration-color: var(--hi); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+
+  /* the panel: grey; its sections white, each titled in a tab */
+  .panel { background: var(--body); border-radius: 18px; padding: 30px 16px 16px; display: grid; gap: 34px 14px; }
+  .sec { position: relative; background: var(--face); border-radius: 12px; padding: 26px 24px 22px; }
+  .tab { position: absolute; top: -22px; left: 50%; transform: translateX(-50%); background: var(--face); border-radius: 7px 7px 0 0;
+         padding: 3px 18px 0; font: 700 18px/1.4 "Barlow Condensed", sans-serif; letter-spacing: .16em; text-transform: uppercase; white-space: nowrap; }
+
+  .top { padding: 34px 0 26px; }
+  .hero { grid-template-columns: 1.25fr 1fr; }
+  .mark { font: 700 clamp(96px, 14vw, 172px)/.82 "Barlow Condensed", sans-serif; letter-spacing: -.01em; margin: 6px 0 10px; }
+  .mark span { color: var(--hi); }
+  .sub { font: 700 16px/1.3 "Barlow Condensed", sans-serif; letter-spacing: .24em; text-transform: uppercase; margin: 0 0 18px; }
+  html body.home h1 { font: 700 clamp(26px, 2.6vw, 34px)/1.12 "Barlow Condensed", sans-serif; text-transform: none; letter-spacing: 0; margin: 0 0 12px; }
+  .hero p { margin: 0 0 12px; max-width: 36em; }
+  .cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+  .btn { font: 600 17px/1 "Barlow Condensed", sans-serif; letter-spacing: .1em; text-transform: uppercase; text-decoration: none;
+         padding: 12px 18px; border: 2px solid var(--ink); border-radius: 3px; color: var(--ink); background: var(--face); }
+  .btn:hover { background: var(--ink); color: var(--face); }
+  .btn.pri { background: var(--hi); border-color: var(--hi); color: #000; }
+  .btn.pri:hover { background: var(--ink); border-color: var(--ink); color: var(--face); }
+  .ver { font: 600 15px "Barlow Condensed", sans-serif; letter-spacing: .08em; color: var(--mute); margin-top: 14px; }
+  .screen { display: grid; place-items: center; }
+  .screen img { width: min(100%, 420px); image-rendering: pixelated; border-radius: 10px; border: 10px solid #111; background: #000; }
+  .screen .cap { font: 600 14px "Barlow Condensed", sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--mute); margin-top: 10px; text-align: center; }
+
+  /* the numbers, as faders' labels */
+  .stats { grid-template-columns: repeat(5, 1fr); }
+  .stat .n { font: 700 48px/1 "Barlow Condensed", sans-serif; }
+  .stat .k { font-weight: 700; font-size: 15px; letter-spacing: .12em; text-transform: uppercase; margin-top: 6px; }
+  .stat p { font-size: 15px; color: var(--mute); margin: 6px 0 0; }
+
+  section.part { padding: 54px 0 0; }
+  html body.home h2 { font: 700 clamp(24px, 2.4vw, 32px)/1.15 "Barlow Condensed", sans-serif; text-transform: none; letter-spacing: 0; margin: 0 0 10px; }
+  .two { grid-template-columns: 1fr 1fr; }
+  .three { grid-template-columns: repeat(3, 1fr); }
+  .sec h3 { font: 700 19px/1.2 "Barlow Condensed", sans-serif; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 6px; }
+  .sec p { margin: 0 0 10px; }
+  .sec ul { margin: 0; padding-left: 1.1em; }
+  .sec li::marker { color: var(--hi); }
+  .sheetpic img { width: 100%; height: auto; display: block; border-radius: 10px; }
+  [data-theme="light"] .sheetpic .dark, [data-theme="dark"] .sheetpic .light { display: none; }
+  footer { margin-top: 60px; padding: 26px 0 50px; border-top: 3px solid var(--ink); color: var(--mute); font-size: 14px; }
+  footer p { margin: 0 0 8px; max-width: 80em; }
+  @media (max-width: 900px) { .hero, .two, .three { grid-template-columns: 1fr; } .stats { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body class="home">
+<div class="wrap">
+  <div class="top">
+    <div class="panel hero">
+      <div class="sec">
+        <span class="tab">Synthesizer</span>
+        <div class="mark" aria-hidden="true">MB<span>-</span>1</div>
+        <p class="sub">for the M-VAVE FM-1</p>
+        <h1>A MiniBrute-style monophonic synthesizer for the M-VAVE FM-1, measured against the real thing.</h1>
+        <p>MB-1 turns the FM-1 into one fat analog-style voice: a sawtooth with Ultrasaw, a square with pulse width, a
+        triangle with Metalizer, a sub oscillator and noise into a resonant 12&nbsp;dB multimode filter with Brute Factor.
+        Every knob was measured, setting by setting, against Arturia's MiniBrute&nbsp;V plugin.</p>
+        <p>Install it from the browser, and put the stock firmware back whenever you like.</p>
+        <div class="cta">
+          <a class="btn pri" href="install/">Install</a>
+          <a class="btn" href="edit/">Patch editor</a>
+          <a class="btn" href="emu/">Try it in the browser</a>
+          <a class="btn" href="manual/">Manual</a>
+        </div>
+        <div class="ver">Version {{VERSION}} · <a href="firmware/{{PKG}}">download {{PKG}}</a> · <a href="https://github.com/leonardolopezchavira/minibrute-fm1">source (MIT)</a></div>
+      </div>
+      <div class="sec screen">
+        <span class="tab">On the FM-1</span>
+        <div><img src="manual/img/playing.png" width="240" height="240" alt="The FM-1's screen running MB-1: patch 01 INIT, the FILTER page with cutoff 4.6 kHz, resonance, Brute Factor and envelope amount">
+        <div class="cap">Four knobs, a page at a time</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel stats" role="list">
+    <div class="sec stat" role="listitem"><span class="tab">Voice</span><div class="n">1</div><div class="k">Monophonic voice</div><p>Five sources, the Brute filter, two ADSRs, LFO and vibrato.</p></div>
+    <div class="sec stat" role="listitem"><span class="tab">Patches</span><div class="n">32</div><div class="k">Slots</div><p>Eight factory sounds; every parameter saved with the patch.</p></div>
+    <div class="sec stat" role="listitem"><span class="tab">Knobs</span><div class="n">76</div><div class="k">Parameters</div><p>Each on its own MIDI CC, for a controller or a DAW.</p></div>
+    <div class="sec stat" role="listitem"><span class="tab">Play</span><div class="n">64</div><div class="k">Sequencer steps</div><p>An arpeggiator and an 8-pattern step sequencer.</p></div>
+    <div class="sec stat" role="listitem"><span class="tab">Effects</span><div class="n">5</div><div class="k">Effects</div><p>Distortion, Juno-style chorus, delay, reverb and a compressor.</p></div>
+  </div>
+
+  <section class="part">
+    <div class="panel two">
+      <div class="sec">
+        <span class="tab">Patch sheets</span>
+        <h2>Edit a patch on a patch sheet, and share it as one.</h2>
+        <p>The MiniBrute keeps no patches, so its players write them down on paper patch sheets and pass them around. MB-1's
+        patch editor is one of those sheets that plays: every value of a patch on one panel, heard as you turn it, in the
+        browser and on the FM-1 at the same time.</p>
+        <ul>
+          <li>Reads the FM-1's 32 slots over USB, and stores your edits back.</li>
+          <li>Plays in the browser with MB-1's own engine, the same code the FM-1 runs.</li>
+          <li>Saves patches and banks as .syx, and the sheet itself as SVG, PNG or a print.</li>
+        </ul>
+        <div class="cta"><a class="btn pri" href="edit/">Open the patch editor</a></div>
+      </div>
+      <div class="sec sheetpic">
+        <span class="tab">A patch</span>
+        <img class="light" src="img/sheet-light.png" width="1600" height="1275" alt="An MB-1 patch sheet: oscillator, filter, mixer, envelopes, LFO, arpeggiator and effects, each value drawn as a knob, fader or switch">
+        <img class="dark" src="img/sheet-dark.png" width="1600" height="1275" alt="The same patch sheet, white on black" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <section class="part">
+    <div class="panel three">
+      <div class="sec"><span class="tab">The sound</span><h3>Measured, not guessed</h3>
+        <p>Oscillators, the Steiner-Parker-style filter, Brute Factor, the envelopes and every effect were compared against
+        MiniBrute&nbsp;V renders, knob position by knob position, until they matched.</p></div>
+      <div class="sec"><span class="tab">The FM-1</span><h3>Made for its two cores</h3>
+        <p>The voice and the distortion, chorus and compressor run on the main core with no added latency; the delay and
+        reverb on the second. Its screen shows the load, so you can see the headroom.</p></div>
+      <div class="sec"><span class="tab">Yours</span><h3>Open, and reversible</h3>
+        <p>MIT-licensed source on GitHub. The installer checks the package, writes it from Chrome or Edge, and can put
+        M-VAVE's own firmware back.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p>MB-1 is an unofficial, from-scratch firmware for the M-VAVE FM-1, installed at your own risk. Built on fm1-base
+    (MPL-2.0) and felucca-bsp, which come from Felucca by Leo Kuroshita, Hügelton Instruments. Type: Barlow Condensed (SIL Open Font License 1.1).</p>
+    <p>Arturia, MiniBrute and MiniBrute V are trademarks of Arturia; M-VAVE and FM-1 are trademarks of their owner. This
+    project is not affiliated with either.</p>
+  </footer>
+</div>
+</body>
+</html>

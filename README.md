@@ -4,7 +4,7 @@ An unofficial Minibrute-style monophonic synthesizer firmware for the M-VAVE FM-
 measured against Arturia's MiniBrute V plugin. Built on [fm1-base](https://github.com/charlesvestal/fm1-base), laid
 out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
 
-- **Install, manual, emulator:** https://leonardolopezchavira.github.io/minibrute-fm1/ (after the first site build)
+- **Install, patch editor, manual, emulator:** https://leonardolopezchavira.github.io/minibrute-fm1/
 - **The voice:** sawtooth with Ultrasaw, square with PWM, triangle with Metalizer, sub (square or sine, -1 or -2
   octaves) and noise; a resonant 12 dB LP / BP / HP / notch filter with Brute Factor, key tracking and self-oscillation;
   filter and amp ADSRs; an LFO (six waves) to pitch, filter, PWM/Metalizer and amp; vibrato; the mod wheel to LFO
@@ -13,13 +13,18 @@ out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
   KeyStep's with 8 patterns (step entry and recording in time; notes, velocity, rests, ties), on one clock: tempo,
   tap tempo or MIDI clock.
 - **Effects:** distortion, a Juno-6 chorus, a stereo delay (ping-pong, tempo sync), a plate reverb and a compressor,
-  saved with each patch and measured against the plugin's, on the FM-1's second core.
+  saved with each patch and measured against the plugin's; the delay and reverb on the FM-1's second core.
+- **The patch editor:** a MiniBrute-style patch sheet in the browser that plays (MB-1's own engine in WebAssembly)
+  and edits the FM-1 live over USB; .syx files, and the sheet out as SVG, PNG or print.
 - **The panel:** see [the manual](app/docs/MANUAL.md).
 
 | Path | What |
 | --- | --- |
 | `app/mbvoice/` | The engine: portable C99, float only (`MB_FASTMATH` uses fm1-base's fastmath.h, no libm) |
 | `app/app.c` | The FM-1 app: pages, patches, MIDI, the screen |
+| `app/mbpatch.h` | A patch's parameters, INIT and factory sounds, and their mapping to the engine (shared with the editor) |
+| `app/editor/` | The patch editor: the page, and its engine's wrapper for WebAssembly (`tools/build_editor.sh`) |
+| `app/site/` | The front page, its pictures and the font (Barlow Condensed, SIL OFL 1.1); `tools/site_theme.py` styles every page |
 | `app/tests/basic.txt` | Host simulator checks |
 | `fm1/base/` | fm1-base, vendored |
 

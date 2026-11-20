@@ -157,10 +157,20 @@ the attacks to 12.5 s, the decays and releases to 25 s, KBD TRK to 200 %, GLIDE 
 0.05 to 100 Hz, VIB RATE from 1 to 50 Hz, US RATE from 0.005 to 43 Hz. A knob at the same place as the plugin's
 knob is the same setting.
 
+## The patch editor
+
+The site's [patch editor](../edit/) is a MiniBrute-style patch sheet that plays: every value of a patch on one
+panel, in light or dark. It sounds in the browser with MB-1's own engine (the arpeggiator too, at the editor's
+tempo) and, with the FM-1 connected by USB (Chrome or Edge), on the FM-1 as you turn each control. It reads the
+FM-1's 32 slots and the sound playing, stores a patch in a slot, writes a whole bank, opens and saves .syx files,
+and exports the sheet as SVG or PNG, or prints it. Reading the FM-1 needs MB-1 0.11.4 or later.
+
 ## Loading patches from a computer
 
-MB-1 takes patches over USB MIDI SysEx (`F0 7D 4D 42 ...`, app/app.c "the loader"): a patch into a slot, the
-slots stored, a slot played, the factory patches back. Each frame is answered.
+MB-1 takes patches over USB MIDI SysEx (`F0 7D 4D 42 ...`, app/app.c "the loader"): a patch into a slot (01), the
+slots stored (02), the factory patches back (03), a slot played (04), a slot's patch sent back (05; slot 7F: the
+sound playing, edits included), what is there (06: the parameter count, the slots, the slot playing, edited or not),
+and a patch played without a slot (07, as an edit: SAVE keeps it). Each frame is answered.
 
 
 MB-1 plays from USB, Bluetooth and TRS MIDI on any channel: notes, pitch bend (VOICE: BEND, 1..12 semitones), the mod wheel (CC 1),

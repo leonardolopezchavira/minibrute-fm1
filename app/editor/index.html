@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT
+     MB-1 for the FM-1: the patch editor. A MiniBrute-style patch sheet you can play: every one of a patch's 76 values
+     on one panel, drawn like the paper sheets MiniBrute players fill in and share (the hardware keeps no patches).
+     Heard as you change it in the page (MB-1's own engine in WebAssembly, mb1_editor.wasm: app/editor/editor_wasm.c,
+     with the firmware's mbvoice, mbfx and mbpatch.h) and, connected over USB, on the FM-1 (Web MIDI with SysEx:
+     Chrome or Edge; app/app.c's SysEx frames 01..07, and the parameters' CCs). Patches come from the FM-1, .syx
+     files or the factory sounds; they go back to the FM-1, to .syx, or out as a patch sheet (SVG, PNG, print).
+     Nothing leaves your computer except to the FM-1. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patch editor · MB-1 for the FM-1</title>
+<script>/* the theme before the first paint: the one picked here before, else the system's */
+try { const t = localStorage.getItem("mb1-theme"); document.documentElement.dataset.theme = t || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch (e) { document.documentElement.dataset.theme = "light"; }
+</script>
+<style>
+  @font-face { font-family: "Barlow Condensed"; font-weight: 500; src: url("../fonts/barlow-condensed-latin-500-normal.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Barlow Condensed"; font-weight: 600; src: url("../fonts/barlow-condensed-latin-600-normal.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("../fonts/barlow-condensed-latin-700-normal.woff2") format("woff2"); font-display: swap; }
+  /* the patch sheet's colours: light (white sections on a grey panel, black ink) or dark (the same, inverted) */
+  :root, [data-theme="light"] { --page: #e9e9e7; --body: #c4c4c4; --face: #ffffff; --ink: #000000; --cap: #c4c4c4;
+    --mute: #5c5c5c; --hi: #f06028; --lcd: #111111; --lcd-ink: #f06028; --btn: #ffffff; --line: #b3b3b3; color-scheme: light; }
+  [data-theme="dark"] { --page: #0b0b0b; --body: #3b3b3b; --face: #000000; --ink: #ffffff; --cap: #3b3b3b;
+    --mute: #a6a6a6; --hi: #f06028; --lcd: #1a1a1a; --lcd-ink: #f06028; --btn: #161616; --line: #3b3b3b; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html body.ed { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.45 "Barlow Condensed", "Arial Narrow", system-ui, sans-serif; }
+  body.ed main { max-width: 1640px; margin: 0 auto; padding: 18px 20px 60px; }
+  body.ed h1 { font: 700 15px/1.2 "Barlow Condensed", sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--mute); margin: 0 0 4px; }
+  body.ed .intro { color: var(--mute); margin: 0 0 16px; max-width: 80em; font-size: 15px; }
+  body.ed a { color: var(--ink); }
+
+  /* the bars above and below the sheet: hardware-like buttons, square, condensed capitals */
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin: 0 0 10px; }
+  .grp { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; background: var(--body); border-radius: 6px; }
+  .grp > .t { font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 13px; color: var(--ink); padding: 0 4px; }
+  body.ed button, body.ed .file { font: 600 14px/1 "Barlow Condensed", sans-serif; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink); background: var(--btn); border: 2px solid var(--ink); border-radius: 3px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+  body.ed button:hover:not(:disabled), body.ed .file:hover { background: var(--ink); color: var(--face); }
+  body.ed button.on { background: var(--hi); border-color: var(--hi); color: #000; }
+  body.ed button:disabled { opacity: .4; cursor: default; }
+  body.ed button:focus-visible, body.ed select:focus-visible, body.ed input:focus-visible, .file:focus-within { outline: 3px solid var(--hi); outline-offset: 2px; }
+  body.ed select, body.ed input[type=text], body.ed input[type=number] { font: 600 14px "Barlow Condensed", sans-serif; letter-spacing: .06em;
+    color: var(--ink); background: var(--btn); border: 2px solid var(--ink); border-radius: 3px; padding: 4px 6px; }
+  body.ed input[type=range] { accent-color: var(--hi); }
+  .file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .status { font-size: 14px; color: var(--mute); letter-spacing: .04em; }
+  .status b { color: var(--ink); }
+  .status.bad b { color: #d0342c; }
+
+  /* the sheet */
+  .sheet { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; touch-action: none; }
+  .sheet text { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; }
+  .sheet .ctl { cursor: ns-resize; outline: none; }
+  .sheet .ctl.fader { cursor: ns-resize; }
+  .sheet .ctl.sw { cursor: pointer; }
+  .sheet .ctl:focus-visible .ring, .sheet .ctl.act .ring { stroke: var(--hi); stroke-width: 4; }
+  .sheet .ring { fill: none; stroke: transparent; }
+
+  .lower { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; margin-top: 14px; align-items: start; }
+  @media (max-width: 1000px) { .lower { grid-template-columns: 1fr; } }
+  /* the keys: white and black, the Brute's */
+  .keys { position: relative; height: 150px; background: var(--body); border-radius: 6px; padding: 10px; display: flex; gap: 10px; }
+  .kbd { position: relative; flex: 1; height: 130px; touch-action: none; }
+  .kbd div { position: absolute; top: 0; border: 2px solid #000; border-top: 0; border-radius: 0 0 3px 3px; }
+  .kbd .w { background: #fff; height: 100%; z-index: 1; }
+  .kbd .b { background: #000; height: 60%; z-index: 2; }
+  .kbd div.down { background: var(--hi); }
+  .wheels { display: flex; gap: 8px; align-items: stretch; }
+  .wheel { display: flex; flex-direction: column; align-items: center; font-weight: 700; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+  .wheel input { writing-mode: vertical-lr; direction: rtl; height: 100px; width: 26px; }
+  .bank { background: var(--body); border-radius: 6px; padding: 10px; }
+  .bank .t { font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 14px; margin: 0 0 6px; display: flex; justify-content: space-between; }
+  .bank ol { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; max-height: 330px; overflow: auto; }
+  .bank li button { width: 100%; text-align: left; font-size: 13px; padding: 4px 6px; border-width: 1px; letter-spacing: .04em; }
+  .bank li button.cur { background: var(--hi); border-color: var(--hi); color: #000; }
+  .bank li button .n { color: var(--mute); margin-right: 6px; }
+  .bank li button.cur .n { color: #000; }
+  .bank .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .note { font-size: 13px; color: var(--mute); margin: 8px 0 0; }
+  kbd { font: 600 12px "Barlow Condensed", sans-serif; border: 1px solid var(--mute); border-radius: 3px; padding: 0 4px; }
+  @media print {
+    body.ed { background: #fff; }
+    body.ed > *:not(main), main > *:not(#sheetwrap) { display: none !important; }
+    #sheetwrap { display: block !important; }
+  }
+</style>
+</head>
+<body class="ed">
+<main>
+<h1>MB-1 patch editor</h1>
+<p class="intro">Every value of an MB-1 patch on one sheet, drawn like the paper patch sheets MiniBrute players fill in and
+share. Drag a control up or down (<kbd>Shift</kbd> for fine), scroll over it, or use the arrow keys; double-click puts it
+back to INIT. Play with the keys below or your computer's keyboard (<kbd>A</kbd>&ndash;<kbd>K</kbd>, <kbd>Z</kbd>/<kbd>X</kbd> octave).
+Connect the FM-1 over USB to read its patches, hear your edits on it as you make them, and store them in its slots
+(Chrome or Edge).</p>
+
+<div class="bar">
+  <div class="grp"><span class="t">Sound</span>
+    <button id="snd" aria-pressed="false">Browser sound</button>
+    <label for="vol" class="status">level</label><input id="vol" type="range" min="0" max="100" value="70" style="width:90px">
+    <label for="tempo" class="status">tempo</label><input id="tempo" type="number" min="30" max="260" value="120" style="width:64px">
+    <label class="status"><input id="lclk" type="checkbox"> LFO on clock</label>
+  </div>
+  <div class="grp"><span class="t">FM-1</span>
+    <button id="conn">Connect</button>
+    <button id="live" aria-pressed="true" class="on" disabled>Live</button>
+    <span id="fmst" class="status">not connected</span>
+  </div>
+  <div class="grp"><span class="t">Patch</span>
+    <label for="pname" class="status">name</label><input id="pname" type="text" maxlength="8" size="9" spellcheck="false" autocomplete="off">
+    <select id="factory" aria-label="Factory sounds"><option value="">Factory sound…</option></select>
+    <button id="init">Init</button>
+    <label class="file">Open .syx<input id="open" type="file" accept=".syx,application/octet-stream"></label>
+    <button id="savesyx">Save .syx</button>
+  </div>
+  <div class="grp"><span class="t">Patch sheet</span>
+    <button id="svg">SVG</button><button id="png">PNG</button><button id="print">Print</button>
+  </div>
+  <div class="grp"><button id="theme" aria-label="Light or dark sheet">Dark sheet</button></div>
+</div>
+
+<div id="sheetwrap"><svg id="sheet" class="sheet" viewBox="0 0 1600 1275" role="group" aria-label="Patch sheet"></svg></div>
+
+<div class="lower">
+  <div>
+    <div class="keys">
+      <div class="wheels">
+        <div class="wheel"><input id="modw" type="range" min="0" max="127" value="0" aria-label="Mod wheel">Mod</div>
+        <div class="wheel"><input id="vel" type="range" min="1" max="127" value="100" aria-label="Velocity">Vel</div>
+      </div>
+      <div id="kbd" class="kbd" aria-label="Keyboard"></div>
+    </div>
+    <p class="note" id="arpnote"></p>
+  </div>
+  <div class="bank">
+    <div class="t"><span>Slots</span><span id="bankst" class="status"></span></div>
+    <ol id="slots"></ol>
+    <div class="row">
+      <button id="toslot">Save to slot</button>
+      <button id="rdall" disabled>Read FM-1</button>
+      <label class="file">Open bank<input id="openbank" type="file" accept=".syx,application/octet-stream"></label>
+      <button id="savebank">Save bank .syx</button>
+      <button id="wrall" disabled>Write all to FM-1</button>
+    </div>
+    <p class="note">Save to slot puts this patch in the slot picked here, and, connected, stores it on the FM-1.</p>
+  </div>
+</div>
+</main>
+
+<script>
+"use strict";
+/* ------------------------------------------------------------------ the parameters (app/mbpatch.h's order) */
+const PN = ["CUT","RES","BRUTE","FENV","MODE","KBD","FVEL","AVEL","SAW","SQR","TRI","SUB","NOISE","ULTRA","PW","METAL",
+  "FA","FD","FS","FR","AA","AD","AS","AR","LRATE","LWAVE","LPITCH","LFILT","LPWM","LAMP","VRATE","VTYPE",
+  "GLIDE","VINT","WDEST","WAMT","SUBOCT","SUBSHP","USRATE","LEVEL","ATVIB","ATCUT","PWENV","MTENV","PLAY","BEND","LRTRG",
+  "ARP","AMODE","AOCT","ASTEP","ASWING","DTIME","DFB","DTONE","DMIX","DSYNC","DMODE","RDECAY","RSIZE","RDAMP","RMIX","RPRE","FXORD",
+  "XTYPE","XDRV","XTONE","XMIX","CRATE","CDEPTH","CPHASE","CMIX","KTHR","KRAT","KATT","KREL"];
+const P = Object.fromEntries(PN.map((n, i) => [n, i]));
+const NP = PN.length, NSLOT = 32;
+const BIP = new Set(["FENV","LPITCH","LFILT","LPWM","LAMP","PWENV","MTENV"].map((n) => P[n]));
+
+/* the engine (mb1_editor.wasm): the parameters' facts, and a value as the FM-1's screen reads it */
+let W = null;   /* its exports, on the page's own copy (the worklet has another) */
+let wasmBytes = null;
+const meta = { max: new Array(NP).fill(127), cc: new Array(NP).fill(0), init: new Array(NP).fill(0), name: [] };
+function cstr(ptr) { const m = new Uint8Array(W.memory.buffer); let s = ""; while (m[ptr]) s += String.fromCharCode(m[ptr++]); return s; }
+const valText = (i, x) => (W ? cstr(W.ed_text(i, x, cur.v[P.DSYNC])) : String(x));
+
+const cur = { v: new Array(NP).fill(0), name: "INIT    " };
+const bank = new Array(NSLOT).fill(null);
+let slot = 0;
+
+/* ------------------------------------------------------------------ the sheet */
+const SVGNS = "http://www.w3.org/2000/svg";
+const sheet = document.getElementById("sheet");
+function el(tag, attrs = {}, parent = null, text = null) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const C = { body: "var(--body)", face: "var(--face)", ink: "var(--ink)", cap: "var(--cap)" };
+const ctl = [];   /* every control: { p, kind, g, update } */
+const byP = new Array(NP);
+
+function label(g, x, y, s, size = 17, anchor = "middle", weight = 700) {
+  return el("text", { x, y, "text-anchor": anchor, "font-size": size, "font-weight": weight, fill: C.ink, "letter-spacing": ".02em" }, g, s);
+}
+function section(x, y, w, h, title) {
+  el("rect", { x, y, width: w, height: h, rx: 12, fill: C.face }, sheet);
+  if (title) {
+    const tw = title.length * 11.5 + 34;
+    el("rect", { x: x + w / 2 - tw / 2, y: y - 24, width: tw, height: 30, rx: 7, fill: C.face }, sheet);
+    el("text", { x: x + w / 2, y: y - 3, "text-anchor": "middle", "font-size": 19, "font-weight": 700, fill: C.ink,
+                 "letter-spacing": ".14em" }, sheet, title.toUpperCase());
+  }
+}
+const deg = (a) => (a - 90) * Math.PI / 180;   /* 0 = up, clockwise */
+const pol = (r, a) => [r * Math.cos(deg(a)), r * Math.sin(deg(a))];
+
+/* a knob: grey cap, a ring of ticks, a pointer. o.big: larger; o.black: a filled cap (Brute Factor, Level) */
+function knob(p, cx, cy, name, o = {}) {
+  const r = o.r || (o.big ? 44 : 30);
+  const g = el("g", { class: "ctl", transform: `translate(${cx},${cy})`, tabindex: 0, role: "slider" }, sheet);
+  el("circle", { class: "ring", r: r + 16 }, g);
+  const ticks = o.ticks || 11;
+  for (let k = 0; k < ticks; k++) {
+    const a = -135 + 270 * k / (ticks - 1), [x1, y1] = pol(r + 5, a), [x2, y2] = pol(r + (k === 0 || k === ticks - 1 || (BIP.has(p) && k === (ticks - 1) / 2) ? 15 : 12), a);
+    el("line", { x1, y1, x2, y2, stroke: C.ink, "stroke-width": 2.6, "stroke-linecap": "round" }, g);
+  }
+  el("circle", { r, fill: o.black ? C.ink : C.cap }, g);
+  if (o.black) el("circle", { r: r * 0.56, fill: "none", stroke: C.face, "stroke-width": 0 }, g);
+  const ptr = el("line", { x1: 0, y1: 0, x2: 0, y2: -r + 3, stroke: o.black ? C.face : C.ink, "stroke-width": o.big ? 7 : 5.5, "stroke-linecap": "round" }, g);
+  if (BIP.has(p)) {
+    label(g, 0, -r - 16, "0", 13, "middle", 600);
+    const [lx, ly] = pol(r + 22, -135), [rx, ry] = pol(r + 22, 135);
+    label(g, lx - 6, ly + 6, "–", 18); label(g, rx + 6, ry + 6, "+", 18);
+  }
+  if (o.ends) { const [lx, ly] = pol(r + 20, -135), [rx, ry] = pol(r + 20, 135);
+    label(g, lx - 4, ly + 12, o.ends[0], 13, "end", 600); label(g, rx + 4, ry + 12, o.ends[1], 13, "start", 600); }
+  label(g, 0, r + (o.big ? 26 : 28), name, o.big ? 19 : 17);
+  const c = { p, kind: "knob", g, name, update(x) { ptr.setAttribute("transform", `rotate(${-135 + 270 * x / meta.max[p]})`); } };
+  return add(c);
+}
+/* a rotary switch: a smaller knob that clicks to its positions, each named round it */
+function rotary(p, cx, cy, name, names, o = {}) {
+  const r = o.r || 24, n = names.length, step = o.step || Math.min(42, 270 / (n - 1)), a0 = o.a0 != null ? o.a0 : -step * (n - 1) / 2;
+  const g = el("g", { class: "ctl", transform: `translate(${cx},${cy})`, tabindex: 0, role: "slider" }, sheet);
+  el("circle", { class: "ring", r: r + 14 }, g);
+  names.forEach((s, k) => {
+    const a = a0 + step * k, [x1, y1] = pol(r + 4, a), [x2, y2] = pol(r + 10, a), [tx, ty] = pol(r + 16, a);
+    el("line", { x1, y1, x2, y2, stroke: C.ink, "stroke-width": 2.6, "stroke-linecap": "round" }, g);
+    const an = Math.sin(deg(a) + Math.PI / 2) > 0.3 ? "start" : Math.sin(deg(a) + Math.PI / 2) < -0.3 ? "end" : "middle";
+    const sx = Math.cos(deg(a)), anchor = sx > 0.25 ? "start" : sx < -0.25 ? "end" : "middle";
+    label(g, tx + (anchor === "start" ? 1 : anchor === "end" ? -1 : 0), ty + 5 + (ty < -r ? -2 : 0), s, 13, anchor, 600);
+    void an;
+  });
+  el("circle", { r, fill: C.cap }, g);
+  const ptr = el("line", { x1: 0, y1: 0, x2: 0, y2: -r + 3, stroke: C.ink, "stroke-width": 5, "stroke-linecap": "round" }, g);
+  label(g, 0, r + (o.labelDy || 40), name, 17);
+  const c = { p, kind: "enum", g, name, update(x) { ptr.setAttribute("transform", `rotate(${a0 + step * Math.min(x, n - 1)})`); } };
+  return add(c);
+}
+/* a fader: a slot, a black cap; its label under it */
+function fader(p, cx, top, h, name, icon) {
+  const g = el("g", { class: "ctl fader", transform: `translate(${cx},${top})`, tabindex: 0, role: "slider" }, sheet);
+  el("rect", { class: "ring", x: -30, y: -12, width: 60, height: h + 24, rx: 6 }, g);
+  el("rect", { x: -9, y: 0, width: 18, height: h, rx: 9, fill: C.cap }, g);
+  el("rect", { x: -40, y: -14, width: 80, height: h + 28, fill: "transparent" }, g);   /* (the grab area) */
+  const cap = el("rect", { x: -24, y: -9, width: 48, height: 18, rx: 2, fill: C.ink }, g);
+  if (icon) icon(g, 0, h + 32); else label(g, 0, h + 38, name, 17);
+  const c = { p, kind: "fader", g, name, h, update(x) { cap.setAttribute("y", (1 - x / meta.max[p]) * h - 9); } };
+  return add(c);
+}
+/* a slide switch: a rounded slot, a dot at its position, the positions named beside it */
+function sw(p, cx, cy, name, names, o = {}) {
+  const n = names.length, gap = o.gap || 22, h = gap * (n - 1) + 24;
+  const g = el("g", { class: "ctl sw", transform: `translate(${cx},${cy})`, tabindex: 0, role: "slider" }, sheet);
+  el("rect", { class: "ring", x: -18, y: -h / 2 - 6, width: 36 + 70, height: h + 12, rx: 8 }, g);
+  el("rect", { x: -12, y: -h / 2, width: 24, height: h, rx: 12, fill: C.cap }, g);
+  names.forEach((s, k) => label(g, 18, -h / 2 + 12 + gap * k + 5, s, 14, "start", 600));
+  const dot = el("circle", { r: 10, fill: C.ink }, g);
+  label(g, o.lx || 20, h / 2 + 26, name, 17);
+  const c = { p, kind: "enum", g, name, update(x) { dot.setAttribute("cy", -h / 2 + 12 + gap * Math.min(x, n - 1)); } };
+  return add(c);
+}
+function add(c) { ctl.push(c); byP[c.p] = c; return c; }
+
+/* the waveforms, drawn as on the panel */
+function wave(g, x, y, kind, s = 1) {
+  const d = { saw: "M-9 6 L-9 6 L7 -6 L7 6", sqr: "M-10 6 L-10 -6 L0 -6 L0 6 L10 6 L10 -6", tri: "M-10 6 L0 -6 L10 6",
+              sine: "M-11 0 C-7 -10 -4 -10 0 0 C4 10 7 10 11 0", noise: "M-11 2 L-8 -6 L-6 5 L-3 -8 L-1 7 L2 -4 L4 6 L7 -7 L9 3 L11 -2" }[kind];
+  el("path", { d, transform: `translate(${x},${y}) scale(${s})`, fill: "none", stroke: C.ink, "stroke-width": 2.6 / s, "stroke-linejoin": "round" }, g);
+}
+const icon = (k) => (g, x, y) => wave(g, x, y, k, 1.2);
+
+function drawSheet() {
+  sheet.textContent = "";
+  ctl.length = 0;
+  el("rect", { x: 0, y: 0, width: 1600, height: 1275, rx: 18, fill: C.body }, sheet);
+  /* row 1: the oscillator, the filter, the Brute block */
+  let y = 50;
+  section(20, y, 545, 270, "Oscillator");
+  label(sheet, 65, y + 24, "SUB OSC", 15);
+  sw(P.SUBSHP, 50, y + 80, "Wave", ["Square", "Sine"], { lx: 18 });
+  sw(P.SUBOCT, 50, y + 200, "Octave", ["−1", "−2"], { lx: 18 });
+  [["saw", 185], ["sqr", 330], ["tri", 475]].forEach(([k, x]) => wave(sheet, x - 62, y + 22, k, 0.9));
+  knob(P.ULTRA, 185, y + 72, "Ultrasaw Amt");
+  knob(P.USRATE, 185, y + 205, "Ultrasaw Rate");
+  knob(P.PW, 330, y + 72, "Pulse Width", { ends: ["50%", "90%"] });
+  knob(P.PWENV, 330, y + 205, "Env Amt");
+  knob(P.METAL, 475, y + 72, "Metalizer");
+  knob(P.MTENV, 475, y + 205, "Env Amt");
+  section(575, y, 490, 270, "Filter");
+  knob(P.CUT, 655, y + 72, "Cutoff", { big: true });
+  knob(P.RES, 820, y + 72, "Resonance");
+  rotary(P.MODE, 985, y + 72, "Mode", ["LP", "BP", "HP", "Notch"], { step: 34, a0: -40 });
+  knob(P.FENV, 655, y + 205, "Env Amt");
+  knob(P.KBD, 820, y + 205, "Kbd Tracking", { ends: ["Off", "200%"] });
+  knob(P.FVEL, 985, y + 205, "Env Velocity");
+  section(1075, y, 505, 270, null);
+  knob(P.BRUTE, 1150, y + 72, "Brute Factor", { big: true, black: true });
+  knob(P.VINT, 1290, y + 72, "Vintage");
+  knob(P.LEVEL, 1440, y + 72, "Level", { big: true, black: true });
+  el("text", { x: 1098, y: y + 232, "font-size": 76, "font-weight": 700, fill: C.ink, "letter-spacing": ".02em" }, sheet, "MB-1");
+  el("text", { x: 1101, y: y + 256, "font-size": 15, "font-weight": 700, fill: C.ink, "letter-spacing": ".16em" }, sheet, "FOR THE M-VAVE FM-1");
+  el("rect", { x: 1330, y: y + 170, width: 232, height: 84, rx: 6, fill: "var(--lcd)" }, sheet);
+  lcd1 = el("text", { x: 1346, y: y + 205, "font-size": 30, "font-weight": 700, fill: "var(--lcd-ink)", "letter-spacing": ".14em" }, sheet, "");
+  lcd2 = el("text", { x: 1346, y: y + 238, "font-size": 20, "font-weight": 600, fill: "var(--lcd-ink)", "letter-spacing": ".08em" }, sheet, "");
+
+  /* row 2: the mixer, the envelopes */
+  y = 355;
+  section(20, y, 545, 230, "Oscillator Mixer");
+  const ft = y + 32, fh = 140;
+  [[P.SUB, 75, "Sub Osc"], [P.SAW, 180, null, "saw"], [P.SQR, 285, null, "sqr"], [P.TRI, 390, null, "tri"], [P.NOISE, 495, null, "noise"]]
+    .forEach(([p, x, n, ic]) => fader(p, x, ft, fh, n, ic ? icon(ic) : null));
+  [127.5, 232.5, 337.5, 442.5].forEach((x) => el("line", { x1: x, y1: y + 14, x2: x, y2: y + 214, stroke: C.ink, "stroke-width": 3 }, sheet));
+  section(575, y, 490, 230, "Filter Envelope");
+  [[P.FA, "Attack"], [P.FD, "Decay"], [P.FS, "Sustain"], [P.FR, "Release"]].forEach(([p, n], k) => fader(p, 636 + 122 * k, ft, fh, n));
+  [697, 819, 941].forEach((x) => el("line", { x1: x, y1: y + 14, x2: x, y2: y + 214, stroke: C.ink, "stroke-width": 3 }, sheet));
+  section(1075, y, 505, 230, "Amplification Envelope");
+  [[P.AA, "Attack"], [P.AD, "Decay"], [P.AS, "Sustain"], [P.AR, "Release"]].forEach(([p, n], k) => fader(p, 1130 + 100 * k, ft, fh, n));
+  [1180, 1280, 1380, 1480].forEach((x) => el("line", { x1: x, y1: y + 14, x2: x, y2: y + 214, stroke: C.ink, "stroke-width": 3 }, sheet));
+  knob(P.AVEL, 1530, y + 100, "Velocity", { r: 22, ticks: 9 });
+
+  /* row 3: the controls, vibrato, the LFO, the arpeggiator */
+  y = 620;
+  section(20, y, 380, 260, "Controls");
+  sw(P.WDEST, 40, y + 68, "Mod Wheel", ["LFO Amt", "Vibrato", "Cutoff"], { gap: 20, lx: 22 });
+  knob(P.WAMT, 200, y + 68, "Wheel Amt", { r: 26 });
+  knob(P.ATVIB, 300, y + 68, "AT Vibrato", { r: 24, ticks: 9 });
+  knob(P.ATCUT, 358, y + 195, "AT Cutoff", { r: 24, ticks: 9 });
+  sw(P.PLAY, 40, y + 195, "Play", ["Legato", "Retrig"], { lx: 22 });
+  knob(P.BEND, 165, y + 195, "Bend Range", { r: 26, ends: ["1", "12"], ticks: 12 });
+  knob(P.GLIDE, 265, y + 195, "Glide", { r: 26 });
+  section(410, y, 130, 260, "Vibrato");
+  sw(P.VTYPE, 445, y + 68, "Type", ["−Sqr", "Sine", "+Sqr"], { gap: 20, lx: 30 });
+  knob(P.VRATE, 475, y + 195, "Rate", { r: 26 });
+  section(550, y, 515, 260, "LFO");
+  knob(P.LPWM, 620, y + 68, "PWM & Metal", { r: 28 });
+  knob(P.LPITCH, 745, y + 68, "Pitch", { r: 28 });
+  knob(P.LFILT, 870, y + 68, "Filter", { r: 28 });
+  knob(P.LAMP, 995, y + 68, "Amp", { r: 28 });
+  rotary(P.LWAVE, 640, y + 196, "Wave", ["Sine", "Tri", "Saw", "Sqr", "S&H", "Smth"], { step: 40, labelDy: 34 });
+  knob(P.LRATE, 805, y + 197, "Rate", { r: 28 });
+  sw(P.LRTRG, 940, y + 195, "Retrig", ["Off", "On"], { lx: 22 });
+  section(1075, y, 505, 260, "Arpeggiator");
+  sw(P.ARP, 1105, y + 68, "Arp", ["Off", "On", "Hold"], { gap: 20, lx: 22 });
+  rotary(P.AOCT, 1265, y + 68, "Octave", ["1", "2", "3", "4"], { step: 36, a0: -36 });
+  rotary(P.AMODE, 1420, y + 68, "Mode", ["Up", "Down", "Up/Dn", "Rndm"], { step: 36, a0: -36 });
+  rotary(P.ASTEP, 1265, y + 196, "Step", ["1/4", "1/8", "1/16", "1/4T", "1/8T", "1/16T"], { step: 34, labelDy: 34 });
+  rotary(P.ASWING, 1420, y + 196, "Swing", ["50%", "55%", "60%", "65%", "70%", "75%"], { step: 34, labelDy: 34 });
+
+  /* rows 4 and 5: MB-1's effects */
+  y = 915;
+  section(20, y, 515, 150, "Distortion");
+  rotary(P.XTYPE, 90, y + 66, "Type", ["Soft", "Hard", "Asym", "Fold"], { step: 36, a0: -54, labelDy: 42 });
+  knob(P.XDRV, 215, y + 66, "Drive", { r: 26 });
+  knob(P.XTONE, 340, y + 66, "Tone", { r: 26 });
+  knob(P.XMIX, 465, y + 66, "Mix", { r: 26 });
+  section(545, y, 515, 150, "Chorus");
+  knob(P.CRATE, 615, y + 66, "Rate", { r: 26 });
+  knob(P.CDEPTH, 740, y + 66, "Depth", { r: 26 });
+  knob(P.CPHASE, 865, y + 66, "Stereo", { r: 26 });
+  knob(P.CMIX, 990, y + 66, "Mix", { r: 26 });
+  section(1070, y, 510, 150, "Compressor");
+  knob(P.KTHR, 1140, y + 66, "Threshold", { r: 26 });
+  knob(P.KRAT, 1265, y + 66, "Ratio", { r: 26 });
+  knob(P.KATT, 1390, y + 66, "Attack", { r: 26 });
+  knob(P.KREL, 1515, y + 66, "Release", { r: 26 });
+  y = 1100;
+  section(20, y, 760, 150, "Delay");
+  [[P.DTIME, "Time"], [P.DFB, "Feedback"], [P.DTONE, "Tone"], [P.DMIX, "Mix"]].forEach(([p, n], k) => knob(p, 90 + 120 * k, y + 66, n, { r: 26 }));
+  sw(P.DSYNC, 540, y + 60, "Sync", ["Free", "Clock"], { lx: 22 });
+  sw(P.DMODE, 655, y + 60, "Mode", ["Stereo", "Ping-Pong"], { lx: 22 });
+  section(790, y, 790, 150, "Reverb");
+  [[P.RPRE, "Pre-Delay"], [P.RDECAY, "Decay"], [P.RSIZE, "Size"], [P.RDAMP, "Damp"], [P.RMIX, "Mix"]].forEach(([p, n], k) => knob(p, 860 + 120 * k, y + 66, n, { r: 26 }));
+  sw(P.FXORD, 1450, y + 60, "FX Order", ["Dly > Rev", "Rev > Dly"], { lx: 30 });
+
+  for (const c of ctl) wire(c);
+  refresh();
+}
+let lcd1, lcd2;
+
+/* ------------------------------------------------------------------ playing the controls */
+function lcd(a, b) { if (lcd1) lcd1.textContent = a; if (lcd2) lcd2.textContent = b; }
+function show(c) { lcd(cur.name.trim() || "—", `${c.name.toUpperCase()}  ${valText(c.p, cur.v[c.p])}`); }
+function refresh() {
+  for (const c of ctl) { c.update(cur.v[c.p]); aria(c); }
+  lcd(cur.name.trim() || "—", "");
+  document.getElementById("pname").value = cur.name.trimEnd();
+  arpNote();
+}
+function aria(c) {
+  c.g.setAttribute("aria-label", c.name); c.g.setAttribute("aria-valuemin", 0); c.g.setAttribute("aria-valuemax", meta.max[c.p]);
+  c.g.setAttribute("aria-valuenow", cur.v[c.p]); c.g.setAttribute("aria-valuetext", valText(c.p, cur.v[c.p]));
+}
+function setP(p, x, from = "ui") {
+  x = Math.max(0, Math.min(meta.max[p], Math.round(x)));
+  if (cur.v[p] === x) return;
+  cur.v[p] = x;
+  const c = byP[p]; if (c) { c.update(x); aria(c); show(c); }
+  if (p === P.DSYNC && byP[P.DTIME]) aria(byP[P.DTIME]);
+  engineSet(p, x);
+  if (from !== "fm") fmParam(p, x);
+  if (p === P.ARP) arpNote();
+  dirty(true);
+}
+function wire(c) {
+  const g = c.g, p = c.p;
+  let drag = null;
+  g.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); g.focus({ preventScroll: true });
+    g.setPointerCapture(e.pointerId); g.classList.add("act"); show(c);
+    if (c.kind === "fader") faderAt(c, e);
+    drag = { y: e.clientY, v: cur.v[p], acc: 0 };
+    if (c.kind === "enum" && c.g.classList.contains("sw")) { setP(p, (cur.v[p] + 1) % (meta.max[p] + 1)); drag = null; }
+  });
+  g.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const scale = sheet.viewBox.baseVal.height / sheet.getBoundingClientRect().height;
+    const dy = (drag.y - e.clientY) * scale;
+    if (c.kind === "fader") return faderAt(c, e);
+    if (c.kind === "enum") { const k = Math.trunc(dy / 28); setP(p, drag.v + k); return; }
+    setP(p, drag.v + dy * (meta.max[p] / 300) * (e.shiftKey ? 0.15 : 1));
+  });
+  const end = () => { drag = null; g.classList.remove("act"); };
+  g.addEventListener("pointerup", end); g.addEventListener("pointercancel", end);
+  g.addEventListener("dblclick", () => setP(p, meta.init[p]));
+  g.addEventListener("wheel", (e) => { e.preventDefault(); show(c); setP(p, cur.v[p] + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey || c.kind === "enum" ? 1 : 2)); }, { passive: false });
+  g.addEventListener("keydown", (e) => {
+    const m = meta.max[p], big = Math.max(1, Math.round(m / 10));
+    const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: big, PageDown: -big }[e.key];
+    if (d) { e.preventDefault(); setP(p, cur.v[p] + d); }
+    else if (e.key === "Home") { e.preventDefault(); setP(p, 0); }
+    else if (e.key === "End") { e.preventDefault(); setP(p, m); }
+    else if (e.key === "Enter" || e.key === " ") { if (c.kind === "enum") { e.preventDefault(); setP(p, (cur.v[p] + 1) % (m + 1)); } }
+  });
+  g.addEventListener("focus", () => show(c));
+}
+function faderAt(c, e) {
+  const pt = sheet.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const q = pt.matrixTransform(c.g.getScreenCTM().inverse());
+  setP(c.p, (1 - q.y / c.h) * meta.max[c.p] * (e.shiftKey ? 1 : 1));
+}
+
+/* ------------------------------------------------------------------ patches */
+function loadPatch(name, v, from = "ui") {
+  cur.name = (name + "        ").slice(0, 8);
+  for (let i = 0; i < NP; i++) cur.v[i] = Math.min(meta.max[i], v[i] ?? meta.init[i]);
+  refresh(); engineAll();
+  if (from !== "fm") fmPatch();
+  dirty(false);
+}
+let isDirty = false;
+function dirty(d) { isDirty = d; document.getElementById("bankst").textContent = d ? "edited" : ""; }
+document.getElementById("pname").addEventListener("input", (e) => {
+  cur.name = (e.target.value.toUpperCase().replace(/[^ -~]/g, "") + "        ").slice(0, 8);
+  e.target.value = e.target.value.toUpperCase();
+  lcd(cur.name.trim(), "NAME"); dirty(true);
+});
+document.getElementById("init").addEventListener("click", () => loadPatch("INIT", meta.init));
+document.getElementById("factory").addEventListener("change", (e) => {
+  const k = +e.target.value; if (e.target.value === "") return;
+  const ptr = W.ed_values(); const name = cstr(W.ed_factory(k, ptr));
+  loadPatch(name, Array.from(new Uint8Array(W.memory.buffer, ptr, NP)));
+  e.target.value = "";
+});
+
+/* the SysEx frames (app/app.c): F0 7D 4D 42 CMD ... F7 */
+const HDR = [0xF0, 0x7D, 0x4D, 0x42];
+const nameBytes = (n) => Array.from((n + "        ").slice(0, 8), (ch) => { const b = ch.charCodeAt(0); return b >= 32 && b < 127 ? b : 32; });
+const frame01 = (s, name, v) => [...HDR, 1, s, ...nameBytes(name), ...v.slice(0, NP), 0xF7];
+function frames(bytes) {   /* the MB-1 frames in a .syx: [{cmd, slot, name, v}] */
+  const out = []; let i = 0;
+  while (i < bytes.length) {
+    if (bytes[i] !== 0xF0) { i++; continue; }
+    let j = i + 1; while (j < bytes.length && bytes[j] !== 0xF7) j++;
+    const f = bytes.slice(i, j + 1); i = j + 1;
+    if (f[1] !== 0x7D || f[2] !== 0x4D || f[3] !== 0x42) continue;
+    const cmd = f[4];
+    if (cmd === 1 || cmd === 5) {
+      const nv = f.length - 15;
+      if ([47, 52, 63, 64, 76].includes(nv)) out.push({ cmd, slot: f[5], name: String.fromCharCode(...f.slice(6, 14)), v: Array.from(f.slice(14, 14 + nv)) });
+    } else if (cmd === 7) {
+      const nv = f.length - 14;
+      if (nv === NP) out.push({ cmd, slot: -1, name: String.fromCharCode(...f.slice(5, 13)), v: Array.from(f.slice(13, 13 + nv)) });
+    }
+  }
+  return out;
+}
+function download(name, data, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data], { type })); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+const fileName = (n) => (n.trim() || "PATCH").replace(/[^A-Za-z0-9_-]+/g, "_");
+document.getElementById("savesyx").addEventListener("click", () => download(fileName(cur.name) + ".syx", new Uint8Array(frame01(0, cur.name, cur.v)), "application/octet-stream"));
+async function readFile(input) { const f = input.files[0]; input.value = ""; return f ? new Uint8Array(await f.arrayBuffer()) : null; }
+document.getElementById("open").addEventListener("change", async (e) => {
+  const b = await readFile(e.target); if (!b) return;
+  const fr = frames(b);
+  if (!fr.length) return say("no MB-1 patch in that file", true);
+  if (fr.length > 1) { putBank(fr); say(`${fr.length} patches: in the slots list`); }
+  else loadPatch(fr[0].name, fr[0].v);
+});
+document.getElementById("openbank").addEventListener("change", async (e) => {
+  const b = await readFile(e.target); if (!b) return;
+  const fr = frames(b); if (!fr.length) return say("no MB-1 patches in that file", true);
+  putBank(fr); say(`${fr.length} patches: in the slots list (not on the FM-1 until you write them)`);
+});
+function putBank(fr) {
+  fr.forEach((f, k) => { const s = f.slot >= 0 && f.slot < NSLOT ? f.slot : k; if (s < NSLOT) bank[s] = { name: f.name, v: fill(f.v), fm: false }; });
+  drawSlots();
+}
+const fill = (v) => Array.from({ length: NP }, (_, i) => (i < v.length ? Math.min(v[i], meta.max[i]) : meta.init[i]));
+document.getElementById("savebank").addEventListener("click", () => {
+  const out = []; bank.forEach((b, s) => { if (b) out.push(...frame01(s, b.name, b.v)); });
+  if (!out.length) return say("the slots list is empty: read the FM-1 or open a bank first", true);
+  download("MB-1_bank.syx", new Uint8Array(out), "application/octet-stream");
+});
+
+/* the slots list */
+function drawSlots() {
+  const ol = document.getElementById("slots"); ol.textContent = "";
+  for (let s = 0; s < NSLOT; s++) {
+    const li = document.createElement("li"), b = document.createElement("button");
+    b.innerHTML = `<span class="n">${String(s + 1).padStart(2, "0")}</span>`;
+    b.append(bank[s] ? bank[s].name.trim() || "—" : "·");
+    if (s === slot) { b.classList.add("cur"); b.setAttribute("aria-current", "true"); }
+    b.addEventListener("click", async () => {
+      slot = s; drawSlots();
+      if (!bank[s]) return;
+      /* a slot the FM-1 has as it is here: played there (04); one from a file: sent as the sound playing (07) */
+      loadPatch(bank[s].name, bank[s].v, bank[s].fm ? "fm" : "ui");
+      if (fm && live && bank[s].fm) await fmSend([...HDR, 4, s, 0xF7], 4);
+    });
+    li.appendChild(b); ol.appendChild(li);
+  }
+}
+document.getElementById("toslot").addEventListener("click", async () => {
+  if (bank[slot] && !confirm(`Replace slot ${slot + 1} (${bank[slot].name.trim()}) with ${cur.name.trim()}?`)) return;
+  bank[slot] = { name: cur.name, v: cur.v.slice(), fm: false }; drawSlots(); dirty(false);
+  if (fm) {
+    const a = await fmSend(frame01(slot, cur.name, cur.v), 1), b = a === 0 ? await fmSend([...HDR, 2, 0xF7], 2, 4000) : -1;
+    if (b === 0) bank[slot].fm = true;
+    say(b === 0 ? `stored in slot ${slot + 1} on the FM-1` : "the FM-1 did not store it", b !== 0);
+  }
+});
+
+/* ------------------------------------------------------------------ the patch sheet out: SVG, PNG, print */
+async function fontCSS() {
+  let css = "";
+  for (const w of [600, 700]) {
+    try {
+      const r = await fetch(`../fonts/barlow-condensed-latin-${w}-normal.woff2`); const b = new Uint8Array(await r.arrayBuffer());
+      let s = ""; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode(...b.subarray(i, i + 8192));
+      css += `@font-face{font-family:"Barlow Condensed";font-weight:${w};src:url(data:font/woff2;base64,${btoa(s)}) format("woff2");}`;
+    } catch (e) { /* (a system font then) */ }
+  }
+  return css;
+}
+async function sheetSVG() {
+  const s = sheet.cloneNode(true);
+  const cs = getComputedStyle(document.documentElement);
+  const vars = ["--body", "--face", "--ink", "--cap", "--lcd", "--lcd-ink"];
+  let txt = new XMLSerializer().serializeToString(s);
+  for (const v of vars) txt = txt.split(`var(${v})`).join(cs.getPropertyValue(v).trim());
+  txt = txt.replace(/ class="ring"[^/]*\/>/g, "/>").replace(/ tabindex="0"| role="slider"| aria-[a-z]+="[^"]*"/g, "");
+  const css = await fontCSS();
+  txt = txt.replace(/^<svg([^>]*)>/, (m, a) => `<svg${a.replace(/ class="sheet"| id="sheet"/g, "")} width="1600" height="1275"><style>${css} text{font-family:"Barlow Condensed","Arial Narrow",sans-serif}</style><title>${cur.name.trim()} · MB-1 patch sheet</title>`);
+  if (!/xmlns="http:\/\/www.w3.org\/2000\/svg"/.test(txt)) txt = txt.replace("<svg", `<svg xmlns="${SVGNS}"`);
+  return txt;
+}
+document.getElementById("svg").addEventListener("click", async () => download(fileName(cur.name) + "_patch_sheet.svg", await sheetSVG(), "image/svg+xml"));
+document.getElementById("png").addEventListener("click", async () => {
+  const img = new Image(); img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(await sheetSVG());
+  await img.decode();
+  const cv = document.createElement("canvas"); cv.width = 3200; cv.height = 2550;
+  cv.getContext("2d").drawImage(img, 0, 0, 3200, 2550);
+  cv.toBlob((b) => download(fileName(cur.name) + "_patch_sheet.png", b, "image/png"), "image/png");
+});
+document.getElementById("print").addEventListener("click", () => window.print());
+
+/* ------------------------------------------------------------------ the theme: light or dark */
+const themeBtn = document.getElementById("theme");
+function themeLabel() { themeBtn.textContent = document.documentElement.dataset.theme === "dark" ? "Light sheet" : "Dark sheet"; }
+themeBtn.addEventListener("click", () => {
+  const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = t; try { localStorage.setItem("mb1-theme", t); } catch (e) { /* */ }
+  themeLabel(); window.dispatchEvent(new Event("mb1-theme"));
+});
+window.addEventListener("mb1-theme", themeLabel);
+
+/* ------------------------------------------------------------------ the sound in the browser (an AudioWorklet) */
+const WORKLET = `
+class MB1 extends AudioWorkletProcessor {
+  constructor() {
+    super(); this.e = null; this.vol = 0.7; this.q = [];
+    this.arp = { on: 0, pool: [], vel: [], held: 0, due: 0, gate: false, pos: 0, sounding: -1, rng: 0x9E3779B9 };
+    this.v = null; this.tempo = 120;
+    this.port.onmessage = (m) => this.msg(m.data);
+  }
+  async msg(d) {
+    if (d.t === "wasm") {
+      const { instance } = await WebAssembly.instantiate(d.bytes, {});
+      this.e = instance.exports; this.e.ed_init(sampleRate);
+      this.v = new Uint8Array(this.e.memory.buffer, this.e.ed_values(), ${NP});
+      this.port.postMessage({ t: "ready" });
+      return;
+    }
+    if (!this.e) return;
+    const e = this.e;
+    switch (d.t) {
+      case "all": this.v.set(d.v); e.ed_apply(); this.arpState(d.v[${P.ARP}]); break;
+      case "set": e.ed_set(d.p, d.x); if (d.p === ${P.ARP}) this.arpState(d.x); break;
+      case "on": if (this.arp.on) this.arpKey(d.n, d.vel); else e.ed_note_on(d.n, d.vel); break;
+      case "off": if (this.arp.on) this.arpKey(d.n, 0); else e.ed_note_off(d.n); break;
+      case "wheel": e.ed_wheel(d.x); break;
+      case "vol": this.vol = d.x; break;
+      case "tempo": this.tempo = d.bpm; e.ed_tempo(d.bpm, d.lfo ? 1 : 0); break;
+      case "panic": e.ed_panic(); this.arpStop(); break;
+    }
+  }
+  /* the arpeggiator, as app.c's: by pitch, HOLD keeps the chord until a key goes down with none held; a note
+     sounds half its step; SWING the second of a pair later */
+  arpState(s) { if (s === this.arp.on) return; if (this.arp.on && !s) this.arpStop(); this.arp.on = s; }
+  arpStop() { const a = this.arp; this.sound(-1, 0); a.pool = []; a.vel = []; a.held = 0; a.gate = false; a.due = 0; a.pos = 0; }
+  sound(n, vel) { const a = this.arp; if (a.sounding >= 0) this.e.ed_note_off(a.sounding); a.sounding = n; if (n >= 0) this.e.ed_note_on(n, vel || 1); }
+  arpKey(n, vel) {
+    const a = this.arp;
+    if (vel) {
+      if (a.on === 2 && a.held === 0) { a.pool = []; a.vel = []; a.pos = 0; }
+      a.held++;
+      if (a.pool.includes(n) || a.pool.length >= 16) return;
+      let i = 0; while (i < a.pool.length && a.pool[i] < n) i++;
+      a.pool.splice(i, 0, n); a.vel.splice(i, 0, vel);
+      if (a.pool.length === 1 && !a.gate) { a.due = 0; a.pos = 0; }
+      return;
+    }
+    if (a.held) a.held--;
+    if (a.on === 2) return;
+    const i = a.pool.indexOf(n); if (i < 0) return;
+    a.pool.splice(i, 1); a.vel.splice(i, 1);
+    if (!a.pool.length) this.arpStop();
+  }
+  stepLen(k) {
+    const B = [1, 0.5, 0.25, 2 / 3, 1 / 3, 1 / 6], v = this.v;
+    let len = sampleRate * 60 / this.tempo * B[v[${P.ASTEP}] % 6];
+    const sw = 0.5 + 0.05 * (v[${P.ASWING}] % 6);
+    len *= 2 * ((k & 1) ? 1 - sw : sw);
+    return Math.max(64, Math.floor(len));
+  }
+  arpEvent() {
+    const a = this.arp, v = this.v, len = this.stepLen(a.pos);
+    if (a.gate) { this.sound(-1, 0); a.gate = false; a.due = len - Math.floor(len / 2); a.pos++; return; }
+    const n = a.pool.length; if (!n) { a.due = 0; return; }
+    const oct = v[${P.AOCT}] % 4 + 1, L = n * oct, i = a.pos % (L * 2); let k;
+    switch (v[${P.AMODE}] % 4) {
+      case 1: k = L - 1 - a.pos % L; break;
+      case 2: k = i < L ? i : 2 * L - 1 - i; break;
+      case 3: a.rng = (Math.imul(a.rng, 1664525) + 1013904223) >>> 0; k = (a.rng >>> 8) % L; break;
+      default: k = a.pos % L;
+    }
+    this.sound(Math.min(127, a.pool[k % n] + 12 * Math.floor(k / n)), a.vel[k % n]);
+    a.gate = true; a.due = Math.floor(len / 2);
+  }
+  process(_, outs) {
+    const o = outs[0], L = o[0], R = o[1] || o[0], N = L.length;
+    if (!this.e) return true;
+    const e = this.e, a = this.arp;
+    let off = 0, guard = 0;
+    while (off < N && guard++ < 64) {
+      let m = N - off;
+      if (a.on && a.pool.length) { if (a.due === 0) this.arpEvent(); if (a.due < m) m = a.due; }
+      if (m <= 0) { if (a.on && a.pool.length && a.due === 0) continue; m = N - off; }
+      const p = e.ed_render(m), f = new Float32Array(e.memory.buffer, p, 2 * m);
+      for (let i = 0; i < m; i++) { L[off + i] = f[2 * i] * this.vol; R[off + i] = f[2 * i + 1] * this.vol; }
+      off += m; if (a.on && a.pool.length) a.due -= m;
+    }
+    return true;
+  }
+}
+registerProcessor("mb1", MB1);`;
+let ac = null, node = null, soundOn = false;
+const sndBtn = document.getElementById("snd");
+async function soundStart() {
+  if (!ac) {
+    ac = new AudioContext({ latencyHint: "interactive" });
+    await ac.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "text/javascript" })));
+    node = new AudioWorkletNode(ac, "mb1", { numberOfInputs: 0, outputChannelCount: [2] });
+    node.connect(ac.destination);
+    await new Promise((res) => { node.port.onmessage = (m) => { if (m.data.t === "ready") res(); }; node.port.postMessage({ t: "wasm", bytes: wasmBytes }); });
+    post({ t: "vol", x: +document.getElementById("vol").value / 100 });
+    tempoOut(); engineAll();
+  }
+  await ac.resume();
+}
+function post(m) { if (node) node.port.postMessage(m); }
+function engineSet(p, x) { post({ t: "set", p, x }); }
+function engineAll() { post({ t: "all", v: Uint8Array.from(cur.v) }); }
+function tempoOut() { post({ t: "tempo", bpm: Math.max(30, Math.min(260, +document.getElementById("tempo").value || 120)), lfo: document.getElementById("lclk").checked }); }
+sndBtn.addEventListener("click", async () => {
+  soundOn = !soundOn;
+  if (soundOn) await soundStart(); else { post({ t: "panic" }); }
+  sndBtn.classList.toggle("on", soundOn); sndBtn.setAttribute("aria-pressed", soundOn);
+});
+document.getElementById("vol").addEventListener("input", (e) => post({ t: "vol", x: e.target.value / 100 }));
+document.getElementById("tempo").addEventListener("change", tempoOut);
+document.getElementById("lclk").addEventListener("change", tempoOut);
+function arpNote() {
+  const on = cur.v[P.ARP];
+  document.getElementById("arpnote").textContent = on ? `Arpeggiator ${on === 2 ? "on hold" : "on"}: it plays at the tempo above in the browser; the FM-1 uses its own tempo (ARP 2 page) or MIDI clock.` : "";
+}
+
+/* ------------------------------------------------------------------ the keys */
+const kbd = document.getElementById("kbd");
+let octave = 4; const LOW = () => 12 * octave;   /* (C4 = 48 at octave 4, MIDI's C3) */
+const NKEY = 29;
+const keyEls = [];
+function drawKeys() {
+  kbd.textContent = ""; keyEls.length = 0;
+  const whites = []; for (let k = 0; k < NKEY; k++) if (![1, 3, 6, 8, 10].includes(k % 12)) whites.push(k);
+  const ww = 100 / whites.length;
+  for (let k = 0; k < NKEY; k++) {
+    const d = document.createElement("div"), black = [1, 3, 6, 8, 10].includes(k % 12);
+    const wi = whites.filter((w) => w < k).length;
+    d.className = black ? "b" : "w";
+    d.style.left = (black ? wi * ww - ww * 0.3 : wi * ww) + "%"; d.style.width = (black ? ww * 0.6 : ww) + "%";
+    d.dataset.k = k; kbd.appendChild(d); keyEls[k] = d;
+  }
+}
+const downKeys = new Map();   /* pointer or key -> note */
+function noteOn(n, src) {
+  if ([...downKeys.values()].includes(n)) return;
+  downKeys.set(src, n);
+  const vel = +document.getElementById("vel").value;
+  if (soundOn) post({ t: "on", n, vel });
+  fmOut([0x90, n, vel]);
+  const k = n - LOW(); if (keyEls[k]) keyEls[k].classList.add("down");
+}
+function noteOff(src) {
+  const n = downKeys.get(src); if (n == null) return; downKeys.delete(src);
+  if (soundOn) post({ t: "off", n });
+  fmOut([0x80, n, 0]);
+  const k = n - LOW(); if (keyEls[k]) keyEls[k].classList.remove("down");
+}
+kbd.addEventListener("pointerdown", (e) => { const k = e.target.dataset.k; if (k == null) return; e.preventDefault(); kbd.setPointerCapture(e.pointerId); noteOn(LOW() + +k, "p" + e.pointerId); if (!soundOn && !fm) say("turn on Browser sound or connect the FM-1 to hear it"); });
+kbd.addEventListener("pointermove", (e) => {
+  if (!downKeys.has("p" + e.pointerId)) return;
+  const t = document.elementFromPoint(e.clientX, e.clientY); const k = t && t.dataset && t.dataset.k;
+  if (k != null && LOW() + +k !== downKeys.get("p" + e.pointerId)) { noteOff("p" + e.pointerId); noteOn(LOW() + +k, "p" + e.pointerId); }
+});
+const kup = (e) => noteOff("p" + e.pointerId);
+kbd.addEventListener("pointerup", kup); kbd.addEventListener("pointercancel", kup);
+const KEYMAP = "awsedftgyhujkolp;";
+window.addEventListener("keydown", (e) => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target; if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+  const k = KEYMAP.indexOf(e.key.toLowerCase());
+  if (k >= 0) { e.preventDefault(); noteOn(LOW() + k, "k" + e.key.toLowerCase()); }
+  else if (e.key.toLowerCase() === "z") { octave = Math.max(1, octave - 1); }
+  else if (e.key.toLowerCase() === "x") { octave = Math.min(7, octave + 1); }
+});
+window.addEventListener("keyup", (e) => noteOff("k" + e.key.toLowerCase()));
+window.addEventListener("blur", () => { for (const s of [...downKeys.keys()]) noteOff(s); });
+document.getElementById("modw").addEventListener("input", (e) => { post({ t: "wheel", x: e.target.value / 127 }); fmOut([0xB0, 1, +e.target.value]); });
+
+/* ------------------------------------------------------------------ the FM-1 over Web MIDI */
+let access = null, fm = null, live = true;
+const fmst = document.getElementById("fmst"), liveBtn = document.getElementById("live");
+function say(s, bad = false) { fmst.innerHTML = ""; const b = document.createElement("b"); b.textContent = s; fmst.appendChild(b); fmst.parentElement.classList.toggle("bad", bad); }
+const waiting = [];   /* [{ match, res, timer }] */
+function onMidi(e) {
+  const d = e.data;
+  if (d[0] !== 0xF0 || d[1] !== 0x7D || d[2] !== 0x4D || d[3] !== 0x42) return;
+  for (let i = 0; i < waiting.length; i++) if (waiting[i].match(d)) { const w = waiting.splice(i, 1)[0]; clearTimeout(w.timer); w.res(d); return; }
+}
+function expect(match, ms = 1500) {
+  return new Promise((res) => { const w = { match, res }; w.timer = setTimeout(() => { waiting.splice(waiting.indexOf(w), 1); res(null); }, ms); waiting.push(w); });
+}
+/* a frame to the FM-1 and its answer's status (0 done, 1 refused; -1 no answer) */
+async function fmSend(f, cmd, ms = 1500) {
+  if (!fm) return -1;
+  const p = expect((d) => d[4] === 0x7F && d[5] === cmd, ms);
+  fm.out.send(f);
+  const d = await p; return d ? d[6] : -1;
+}
+function fmOut(bytes) { if (fm) try { fm.out.send(bytes); } catch (e) { /* (gone) */ } }
+async function fmRead(s) {   /* a slot's patch (0x7F: the sound playing) */
+  const p = expect((d) => d[4] === 5 && d[5] === s, 1500);
+  fm.out.send([...HDR, 5, s, 0xF7]);
+  const d = await p; if (!d) return null;
+  const f = frames(d)[0]; return f ? { name: f.name, v: fill(f.v), fm: true } : null;
+}
+async function connect() {
+  if (!navigator.requestMIDIAccess) return say("this browser has no Web MIDI: use Chrome or Edge", true);
+  try { access = access || await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (e) { return say("MIDI not allowed: allow it for this page and connect again", true); }
+  access.onstatechange = () => { if (fm && fm.out.state === "disconnected") { fm = null; fmUi(); say("the FM-1 went away"); } };
+  say("looking for MB-1 …", false);
+  const ins = [...access.inputs.values()].filter((p) => p.state !== "disconnected");
+  const outs = [...access.outputs.values()].filter((p) => p.state !== "disconnected");
+  for (const i of ins) i.onmidimessage = onMidi;
+  const bare = (s) => (s || "").replace(/\s+\d+$/, "");
+  const found = [];
+  await Promise.all(outs.map(async (o) => {
+    const p = expect((d) => d[4] === 6, 700); try { o.send([...HDR, 6, 0xF7]); } catch (e) { return; }
+    const d = await p; if (d) found.push({ out: o, info: d });
+  }));
+  if (!found.length) { for (const i of ins) i.onmidimessage = null; return say("no FM-1 running MB-1 0.11.4 or later answered: is it plugged in, with MB-1 updated?", true); }
+  const pick = found[0];
+  const inp = ins.find((i) => bare(i.name) === bare(pick.out.name)) || ins[0];
+  for (const i of ins) if (i !== inp) i.onmidimessage = null;
+  fm = { out: pick.out, in: inp, name: pick.out.name };
+  const [, , , , , np, nslot, s, edited] = pick.info;
+  slot = s; fmUi();
+  say(`MB-1 on ${fm.name}: slot ${s + 1}${edited ? " (edited)" : ""}`);
+  await readAll();
+  const c = await fmRead(0x7F);
+  if (c) loadPatch(c.name, c.v, "fm");
+  void np; void nslot;
+}
+async function readAll() {
+  if (!fm) return;
+  for (let s = 0; s < NSLOT; s++) { const p = await fmRead(s); if (p) bank[s] = p; document.getElementById("bankst").textContent = `reading ${s + 1}/32`; }
+  document.getElementById("bankst").textContent = ""; drawSlots();
+}
+function fmUi() {
+  document.getElementById("conn").textContent = fm ? "Reconnect" : "Connect";
+  liveBtn.disabled = !fm; document.getElementById("rdall").disabled = !fm; document.getElementById("wrall").disabled = !fm;
+  if (!fm) fmst.textContent = "not connected";
+}
+document.getElementById("conn").addEventListener("click", connect);
+document.getElementById("rdall").addEventListener("click", readAll);
+liveBtn.addEventListener("click", () => { live = !live; liveBtn.classList.toggle("on", live); liveBtn.setAttribute("aria-pressed", live); if (live) fmPatch(); });
+document.getElementById("wrall").addEventListener("click", async () => {
+  if (!fm || !confirm("Write every slot in the list to the FM-1 and store them? Slots that are empty here stay as they are.")) return;
+  let ok = 0, n = 0;
+  for (let s = 0; s < NSLOT; s++) if (bank[s]) { n++; if (await fmSend(frame01(s, bank[s].name, bank[s].v), 1) === 0) ok++; }
+  const st = await fmSend([...HDR, 2, 0xF7], 2, 4000);
+  if (st === 0) bank.forEach((b) => { if (b) b.fm = true; });
+  say(st === 0 && ok === n ? `${n} slots written and stored` : `written ${ok} of ${n}; ${st === 0 ? "stored" : "not stored"}`, !(st === 0 && ok === n));
+});
+/* live: a change goes out as its CC (the FM-1 maps 0..127 onto a switch's positions), a whole patch as frame 07 */
+const ccOf = (p, x) => (meta.max[p] === 127 ? x : Math.min(127, Math.ceil(x * 128 / (meta.max[p] + 1))));
+const pend = new Map(); let pendT = 0;
+function fmParam(p, x) {
+  if (!fm || !live) return;
+  pend.set(p, x);
+  if (!pendT) pendT = setTimeout(() => { pendT = 0; for (const [q, y] of pend) fmOut([0xB0, meta.cc[q], ccOf(q, y)]); pend.clear(); }, 15);
+}
+function fmPatch() { if (fm && live) fmOut([...HDR, 7, ...nameBytes(cur.name), ...cur.v, 0xF7]); }
+
+/* ------------------------------------------------------------------ start */
+(async () => {
+  try {
+    wasmBytes = await (await fetch("mb1_editor.wasm")).arrayBuffer();
+    const { instance } = await WebAssembly.instantiate(wasmBytes, {});
+    W = instance.exports; W.ed_init(48000);
+    if (W.ed_np() !== NP) throw new Error("parameter count");
+    for (let i = 0; i < NP; i++) { meta.max[i] = W.ed_max(i); meta.cc[i] = W.ed_cc(i); meta.init[i] = W.ed_init_v(i); meta.name[i] = cstr(W.ed_name(i)); }
+    const sel = document.getElementById("factory");
+    for (let k = 0; k < W.ed_nfactory(); k++) { const o = document.createElement("option"); o.value = k; o.textContent = cstr(W.ed_factory(k, W.ed_values())).trim(); sel.appendChild(o); }
+  } catch (e) { say("the engine did not load: " + e.message, true); }
+  for (let i = 0; i < NP; i++) cur.v[i] = meta.init[i];
+  cur.name = "INIT    ";
+  drawSheet(); drawKeys(); drawSlots(); themeLabel(); fmUi();
+})();
+</script>
+</body>
+</html>
