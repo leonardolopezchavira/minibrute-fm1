@@ -7,8 +7,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MB-1 · a MiniBrute-style synthesizer for the M-VAVE FM-1</title>
-<meta name="description" content="MB-1: an unofficial MiniBrute-style monophonic synthesizer for the M-VAVE FM-1, measured against the MiniBrute V plugin. Install it from the browser, edit its patches on a patch sheet.">
+<title>MB-1 · an aggressive monophonic virtual analog synthesizer for the M-VAVE FM-1</title>
+<meta name="description" content="MB-1: an unofficial, aggressive monophonic virtual analog synthesizer for the M-VAVE FM-1, after the MiniBrute, measured against the MiniBrute V plugin. Install it from the browser, edit its patches on a patch sheet.">
 <script>
 try { const t = localStorage.getItem("mb1-theme"); document.documentElement.dataset.theme = t || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch (e) { document.documentElement.dataset.theme = "light"; }
 </script>
@@ -77,11 +77,12 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
         <span class="tab">Synthesizer</span>
         <div class="mark" aria-hidden="true">MB<span>-</span>1</div>
         <p class="sub">for the M-VAVE FM-1</p>
-        <h1>A MiniBrute-style monophonic synthesizer for the M-VAVE FM-1, measured against the real thing.</h1>
+        <h1>An aggressive monophonic virtual analog synthesizer for the M-VAVE FM-1, after the MiniBrute and measured against it.</h1>
         <p>MB-1 turns the FM-1 into one fat analog-style voice: a sawtooth with Ultrasaw, a square with pulse width, a
         triangle with Metalizer, a sub oscillator and noise into a resonant 12&nbsp;dB multimode filter with Brute Factor.
         Every knob was measured, setting by setting, against Arturia's MiniBrute&nbsp;V plugin.</p>
-        <p>Install it from the browser, and put the stock firmware back whenever you like.</p>
+        <p>128 patch slots, an arpeggiator, a 64-step sequencer and five effects. Install it from the browser, and put
+        the stock firmware back whenever you like.</p>
         <div class="cta">
           <a class="btn pri" href="install/">Install</a>
           <a class="btn" href="edit/">Patch editor</a>
@@ -92,8 +93,8 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
       </div>
       <div class="sec screen">
         <span class="tab">On the FM-1</span>
-        <div><img src="manual/img/playing.png" width="240" height="240" alt="The FM-1's screen running MB-1: patch 01 INIT, the FILTER page with cutoff 4.6 kHz, resonance, Brute Factor and envelope amount">
-        <div class="cap">Four knobs, a page at a time</div></div>
+        <div><img src="manual/img/playing.png" width="240" height="240" alt="The FM-1's screen running MB-1: patch A01 INIT, the FILTER page, its cutoff, resonance, Brute Factor and envelope amount drawn as knobs with their values in orange">
+        <div class="cap">Four controls a page, drawn as on the patch sheet</div></div>
       </div>
     </div>
   </div>

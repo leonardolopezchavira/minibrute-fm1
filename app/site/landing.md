@@ -1,13 +1,15 @@
 # MB-1
 
-MB-1 is an unofficial Minibrute-style monophonic synthesizer for the M-VAVE FM-1, written from scratch and
-measured, setting by setting, against Arturia's MiniBrute V plugin: a sawtooth with Ultrasaw, a square with
-pulse width, a triangle with Metalizer, a sub oscillator and noise into a resonant 12 dB multimode filter with
-Brute Factor, two ADSR envelopes, an LFO, vibrato, glide and the mod wheel on the ALGO knob.
+MB-1 is an unofficial, aggressive monophonic virtual analog synthesizer for the M-VAVE FM-1, after the MiniBrute:
+written from scratch and measured, setting by setting, against Arturia's MiniBrute V plugin. A sawtooth with
+Ultrasaw, a square with pulse width, a triangle with Metalizer, a sub oscillator and noise into a resonant 12 dB
+multimode filter with Brute Factor; two ADSR envelopes, an LFO, vibrato and glide; an arpeggiator, a 64-step
+sequencer and five effects; 128 patch slots.
 
 This is version {{VERSION}}. You install it at your own risk, and the installer can put M-VAVE's own firmware back.
 
 - [Install](install/) it from Chrome or Edge, with the FM-1 connected by USB.
+- Edit patches on a patch sheet in the [patch editor](edit/).
 - Read the [manual](manual/).
 - [Try it in the browser](emu/).
 - [Download {{PKG}}](firmware/{{PKG}}).

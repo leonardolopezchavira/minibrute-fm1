@@ -1,14 +1,20 @@
 # MB-1 manual
 
-MB-1 turns the FM-1 into a monophonic Minibrute-style synthesizer. One voice, last-note priority: hold a key, play
-another, let it go, and the first comes back (with glide, if GLIDE is up).
+MB-1 turns the FM-1 into an aggressive monophonic virtual analog synthesizer, after the Arturia MiniBrute and
+measured against its MiniBrute V plugin. One voice, last-note priority: hold a key, play another, let it go, and the
+first comes back (with glide, if GLIDE is up). It keeps 128 patches, has an arpeggiator, a 64-step sequencer and five
+effects, and comes with a patch editor in the browser.
 
 ![Playing](img/playing.png)
 
 ## The screen
 
-At the top: the patch slot and its name (a `*` when it has changed since it was saved) and the note playing. In the
-middle: the page, and its four parameters, one for each of K1..K4, each drawn as on the patch editor's sheet (a knob, a fader for the mixer and the envelopes, a slide switch for the two- and three-way choices) with its value. At the bottom: the mod
+MB-1 starts with its own screen: the four waveforms, its name and what it is. Then, in the site's dark colours
+(black, the panel's grey, white labels, orange values):
+
+At the top: the patch slot (A01..D32) and its name (a `*` when it has changed since it was saved) and the note playing. In the
+middle: the page, and its four parameters, one for each of K1..K4, each drawn as on the patch editor's sheet (a knob, a fader for the mixer and the envelopes, a slide switch for the
+two- and three-way choices) with its value; the one being turned lights up, its pointer orange. At the bottom: the mod
 wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PEAK: the most since power-on, in % of the time the FM-1 has for each block of sound; XRUN: blocks it missed, heard as clicks), and the sound as a scope.
 
 ## The controls
@@ -94,7 +100,10 @@ LFO CLK belong to the instrument (one tempo for every patch).
 
 ## The effects
 
-A delay and a reverb, after the plugin's; saved with each patch. **FX ORDER** (FX 2): DLY>REV (the repeats into the
+Five effects, after the plugin's and measured against them, saved with each patch: distortion, chorus, delay, reverb
+and a compressor, in that order (FX ORDER can put the reverb before the delay).
+
+**Delay and reverb.** **FX ORDER** (FX 2): DLY>REV (the repeats into the
 reverb, the usual) or REV>DLY (the reverb's tail repeated), as each of the plugin's presets has them. They are stereo: the
 voice in the middle, the repeats and the reverb around it. With MIX at 0 an effect is off; half way, dry and wet are
 both at -3 dB (an equal-power crossfade, as the plugin's). Matched to the plugin's delay and reverb by measurement.
@@ -111,8 +120,8 @@ They run on the FM-1's second core while the first plays the voice (the screen's
 second core is unreliable (some are), MB-1 notices, gives it up until power-off, and runs them on the first (**1C**):
 the same sound, with less headroom. Only the effects are a block (6 ms) behind the voice; the dry sound is not.
 
-**Distortion, chorus, compressor** (0.11), measured against the plugin's: in the sound itself, the distortion first, then
-the chorus, then the delay and reverb (FX ORDER), the compressor last.
+**Distortion, chorus, compressor**, in the sound itself: the distortion first, then the chorus, then the delay and
+reverb (FX ORDER), the compressor last.
 
 - **DIST**: **TYPE** SOFT (a rounded clip: the plugin's types 12, 13), HARD (10), ASYM (lopsided, even harmonics: 6, 7)
   or FOLD (folds back on itself as DRIVE rises: 9); **DRIVE** 0 to 48 dB (the level made up as it rises); **TONE** a
@@ -147,8 +156,9 @@ seconds after a change, while stopped; SAVE also stores them) and kept over powe
 
 ## The patches
 
-Slots A01..A08 start with factory sounds: INIT, BASS, ACID, METALEAD, ULTRAPAD, PERC, BRASS, WOBBLE; the rest
-start as INIT. SAVE writes over the slot shown. (Before 0.12 there were 32 slots: they are bank A now, as they were.)
+128 slots in four banks of 32, A01..D32: turn PRESET to pick one. Slots A01..A08 start with factory sounds: INIT, BASS, ACID, METALEAD, ULTRAPAD, PERC, BRASS, WOBBLE; the rest
+start as INIT. SAVE writes over the slot shown. (Before 0.12 there were 32 slots: they are bank A now, as they were.) The
+patch editor (below) reads, edits and stores all of them, and keeps banks as .syx files.
 
 ## The knobs' range
 
@@ -160,10 +170,11 @@ knob is the same setting.
 ## The patch editor
 
 The site's [patch editor](../edit/) is a MiniBrute-style patch sheet that plays: every value of a patch on one
-panel, in light or dark. It sounds in the browser with MB-1's own engine (the arpeggiator too, at the editor's
+panel, drawn like the paper sheets MiniBrute players fill in and share, in light or dark. It sounds in the browser with MB-1's own engine (the arpeggiator too, at the editor's
 tempo) and, with the FM-1 connected by USB (Chrome or Edge), on the FM-1 as you turn each control. It reads the
-FM-1's 128 slots and the sound playing, stores a patch in a slot, writes a whole bank, opens and saves .syx files,
-and exports the sheet as SVG or PNG, or prints it. Reading the FM-1 needs MB-1 0.11.4 or later.
+FM-1's 128 slots (banks A..D) and the sound playing, stores a patch in a slot, writes a whole bank, opens and saves
+.syx files, and exports the sheet as SVG or PNG, or prints it. Reading the FM-1 needs MB-1 0.11.4 or later, all 128
+slots 0.12 or later. Every control on the sheet has its CC (below): a controller or a DAW can play them the same way.
 
 ## Loading patches from a computer
 
@@ -173,6 +184,7 @@ back (05), what is there (06: the parameter count, the banks of 32, the slot pla
 without a slot (07, as an edit: SAVE keeps it), and the sound playing sent back, edits included (08). Each frame is
 answered.
 
+## MIDI
 
 MB-1 plays from USB, Bluetooth and TRS MIDI on any channel: notes, pitch bend (VOICE: BEND, 1..12 semitones), the mod wheel (CC 1),
 aftertouch (channel or poly), all notes off (CC 120, 123), and every parameter by its CC. The keys and the knobs are

@@ -1,7 +1,7 @@
 # MB-1 for the M-VAVE FM-1
 
-An unofficial Minibrute-style monophonic synthesizer firmware for the M-VAVE FM-1, written from scratch and
-measured against Arturia's MiniBrute V plugin. Built on [fm1-base](https://github.com/charlesvestal/fm1-base), laid
+An unofficial, aggressive monophonic virtual analog synthesizer firmware for the M-VAVE FM-1, after the Arturia
+MiniBrute: written from scratch and measured against Arturia's MiniBrute V plugin. Built on [fm1-base](https://github.com/charlesvestal/fm1-base), laid
 out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
 
 - **Install, patch editor, manual, emulator:** https://leonardolopezchavira.github.io/minibrute-fm1/
@@ -9,13 +9,17 @@ out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
   octaves) and noise; a resonant 12 dB LP / BP / HP / notch filter with Brute Factor, key tracking and self-oscillation;
   filter and amp ADSRs; an LFO (six waves) to pitch, filter, PWM/Metalizer and amp; vibrato; the mod wheel to LFO
   amount, vibrato or cutoff; aftertouch; glide; vintage drift.
+- **Patches:** 128 slots in four banks of 32 (A01..D32), every parameter saved with the patch and on its own MIDI CC.
 - **Performance:** an arpeggiator after the Minibrute's (saved with each patch), and a 64-step sequencer after the
   KeyStep's with 8 patterns (step entry and recording in time; notes, velocity, rests, ties), on one clock: tempo,
   tap tempo or MIDI clock.
 - **Effects:** distortion, a Juno-6 chorus, a stereo delay (ping-pong, tempo sync), a plate reverb and a compressor,
-  saved with each patch and measured against the plugin's; the delay and reverb on the FM-1's second core.
+  saved with each patch and measured against the plugin's: distortion, chorus and compressor in the voice (no added
+  latency), the delay and reverb on the FM-1's second core.
 - **The patch editor:** a MiniBrute-style patch sheet in the browser that plays (MB-1's own engine in WebAssembly)
   and edits the FM-1 live over USB; .syx files, and the sheet out as SVG, PNG or print.
+- **The screen:** each parameter drawn as on the patch sheet (knob, fader or slide switch), in the site's dark
+  colours, after a start-up screen of its own.
 - **The panel:** see [the manual](app/docs/MANUAL.md).
 
 | Path | What |
@@ -25,6 +29,8 @@ out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
 | `app/mbpatch.h` | A patch's parameters, INIT and factory sounds, and their mapping to the engine (shared with the editor) |
 | `app/editor/` | The patch editor: the page, and its engine's wrapper for WebAssembly (`tools/build_editor.sh`) |
 | `app/site/` | The front page, its pictures and the font (Barlow Condensed, SIL OFL 1.1); `tools/site_theme.py` styles every page |
+| `app/splash/` | The start-up screen (SVG and its 240 x 240 PNG); `tools/make_splash.py` makes `app/splash_img.h` from it |
+| `tools/` | The site's and editor's build steps (`build_editor.sh`, `make_home.py`, `site_theme.py`) and `make_splash.py` |
 | `app/tests/basic.txt` | Host simulator checks |
 | `fm1/base/` | fm1-base, vendored |
 
@@ -33,8 +39,11 @@ out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
     python3 fm1/base/tools/build.py app --host        # the host simulator, then:
     app/build/host/mb1_host app/tests/basic.txt app/build/host
     python3 fm1/base/tools/build.py app --release 0.1.0   # the firmware (JieLi toolchain; CI does this)
+    sh tools/build_editor.sh /tmp/edit                # the patch editor and its engine (clang, wasm-ld)
 
-Every push to `main` builds the firmware on GitHub Actions (zvenson/fm1-build) and publishes the site.
+Every push to `main` builds the firmware on GitHub Actions (zvenson/fm1-build) and publishes the site: fm1-base's
+installer, manual and emulator, then the front page (`tools/make_home.py`), the patch editor
+(`tools/build_editor.sh`) and the look over all of them (`tools/site_theme.py`).
 
 ## About the measurements
 
