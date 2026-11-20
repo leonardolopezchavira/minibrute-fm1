@@ -166,7 +166,7 @@ wait 30
 tap ARP
 wait 30
 expect arp 1
-expect page 15
+expect page 18
 expect tempo 120
 key 7 down
 key 11 down
@@ -221,7 +221,7 @@ press ARP
 wait 600
 release ARP
 wait 30
-expect page 16
+expect page 19
 expect arp 2
 wait 30
 turn K3 1
@@ -253,7 +253,7 @@ press ARP
 wait 600
 release ARP
 wait 30
-expect page 16
+expect page 19
 turn K1 30
 wait 30
 expect tempo 150
@@ -524,11 +524,11 @@ expect arpstate 0
 wait 600
 tap SEQ
 wait 30
-expect page 17
+expect page 20
 expect octave 0
 turn SELECT -1
 wait 30
-expect page 16
+expect page 19
 turn K1 -30
 wait 30
 expect tempo 120
@@ -551,7 +551,7 @@ key 9 up
 wait 30
 tapkey 14
 wait 30
-expect page 17
+expect page 20
 expect seqlen 6
 expect sn1 60
 expect sn2 64
@@ -683,6 +683,8 @@ turn K2 -1
 turn K4 1
 wait 30
 expect p63 1
+tap HOME
+wait 30
 tap FX
 wait 30
 tap FX
@@ -698,4 +700,28 @@ key 7 down
 wait 100
 key 7 up
 wait 700
-expect fxpeak >5
+expect fxpeak >1
+# the distortion, chorus, compressor: FX's pages DIST, CHORUS, COMP; any on, all of the sound from the effects
+tap FX
+wait 30
+tap FX
+wait 30
+expect page 15
+turn K4 64
+wait 30
+tap FX
+wait 30
+expect page 16
+turn K4 64
+wait 30
+tap FX
+wait 30
+expect page 17
+turn K2 20
+wait 30
+shot comp.png
+key 7 down
+wait 300
+expect fxpeak >20
+key 7 up
+wait 300

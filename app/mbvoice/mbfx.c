@@ -103,7 +103,7 @@ static const uint32_t AP1[2] = {996, 1345}, DL1[2] = {6598, 6249}, AP2[2] = {266
 
 void mbfx_clear(MBFx *f)
 {
-    mb_zero(f->dl, (MBFX_DL_LEN + MBFX_PRE_LEN + MBFX_REV_LEN) * sizeof(int16_t));
+    mb_zero(f->dl, (MBFX_DL_LEN + MBFX_PRE_LEN + MBFX_REV_LEN + MBFX_CHO_LEN) * sizeof(int16_t));
     f->d_lpa = f->d_lpb = f->d_lpa2 = f->d_lpb2 = f->d_hpa = f->d_hpb = f->d_hpxa = f->d_hpxb = 0.0f;
     f->r_lp_in = f->r_damp_st[0] = f->r_damp_st[1] = f->r_tank_fb[0] = f->r_tank_fb[1] = 0.0f;
 }
@@ -125,6 +125,7 @@ void mbfx_init(MBFx *f, float sr, int16_t *mem)
         m = line_at(&f->ap2[i], m, AP2[i] + 1u);
         m = line_at(&f->dl2[i], m, DL2[i] + 1u);
     }
+    f->cbuf = mem + MBFX_DL_LEN + MBFX_PRE_LEN + MBFX_REV_LEN;
     f->r_scale = 1.0f;
     f->r_lc = 1.0f;
     f->d_cur = 0.3f * sr;
@@ -151,6 +152,48 @@ static inline uint32_t sc(uint32_t n, float k)
     return r < 1u ? 1u : r;
 }
 
+int mbfx_full(const MBFxParams *p) { return p->x_mix > 0.001f || p->c_mix > 0.001f || p->k_ratio > 1.01f; }
+
+/* ------------------------------------------------- distortion, chorus, compressor --- */
+#ifndef FX_REF
+#define FX_REF 3.8f                       /* MB-1's level against the plugin's inside its FX (+11.6 dB) */
+#endif
+#ifndef KREF
+#define KREF FX_REF                       /* (the compressor's own) */
+#endif
+#ifndef XA0
+#define XA0 0.05f
+#endif
+#ifndef XK
+#define XK 2.0f
+#endif
+static inline float shape(uint32_t t, float u)
+{
+    switch (t) {
+    case 1: {                                /* hard, a little rounded */
+        float u2 = u * u;
+        return u / mb_sqrtf(mb_sqrtf(1.0f + u2 * u2));
+    }
+    case 2: {                                /* asymmetric: the top softer than the bottom (even harmonics) */
+        float v = u + 0.5f;
+        v = v > 3.0f ? 3.0f : v < -3.0f ? -3.0f : v;
+        return v * (27.0f + v * v) / (27.0f + 9.0f * v * v) - 0.4621f;
+    }
+    case 3: {                                /* a fold: reflected back between -1 and 1, its corners rounded (the
+                                              * plugin's folds start 12 dB later than the others clip) */
+        float t4 = 0.25f * u + 1.0f, y;
+        t4 -= 4.0f * mb_floorf(t4 * 0.25f);
+        y = t4 < 2.0f ? t4 - 1.0f : 3.0f - t4;
+        return y * (1.5f - 0.5f * y * y);
+    }
+    default: {                               /* soft (tanh) */
+        float v = u > 3.0f ? 3.0f : u < -3.0f ? -3.0f : u;
+        return v * (27.0f + v * v) / (27.0f + 9.0f * v * v);
+    }
+    }
+}
+static const float CHO_GAIN = 0.944f;      /* the plugin's wet: -0.5 dB */
+
 void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
 {
     const MBFxParams *p = &f->p;
@@ -173,6 +216,19 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
     uint32_t a1[2], d1[2], a2[2], d2[2];
     float r_alive = 0.0f, r_gain = RV_GAIN;
     int rev_first = p->order == 1u;
+    const int full = mbfx_full(p);
+    const int x_on = p->x_mix > 0.001f, c_on = p->c_mix > 0.001f, k_on = p->k_ratio > 1.01f;
+    const float xg = mb_exp2f(p->x_drive_db * 0.16609640f) * FX_REF;   /* (10^(dB/20)) */
+    const float xout = XK * XA0 / shape(p->x_type == 2u ? 0u : p->x_type, xg * XA0);   /* (auto gain: a level XA0 through at XK) */
+    const float xw = x_on ? mb_sinf(1.5707963f * p->x_mix) : 0.0f, xd_ = x_on ? mb_cosf(1.5707963f * p->x_mix) : 1.0f;
+    const float xlpc = 1.0f - mb_expf(-6.2831853f * 1000.0f * mb_exp2f(4.3219281f * p->x_tone) / f->sr);
+    const float cw_ = c_on ? mb_sinf(1.5707963f * p->c_mix) * CHO_GAIN : 0.0f, cd_ = c_on ? mb_cosf(1.5707963f * p->c_mix) : 1.0f;
+    const float c_inc = p->c_rate_hz / f->sr, c_base = 0.0016f * f->sr, c_pp = p->c_depth_ms * 0.001f * f->sr;
+    const float c_lpc = 1.0f - mb_expf(-6.2831853f * 8000.0f / f->sr);
+    const float k_r = p->k_ratio < 1.0f ? 1.0f : p->k_ratio;
+    const float k_slope = 1.0f / k_r - 1.0f, k_mk = -p->k_thr_db * (1.0f - 1.0f / k_r) * 0.75f;
+    const float k_att = 1.0f - mb_expf(-1000.0f / ((p->k_att_ms > 0.01f ? p->k_att_ms : 0.01f) * f->sr));
+    const float k_rel = 1.0f - mb_expf(-1000.0f / ((p->k_rel_ms > 1.0f ? p->k_rel_ms : 1.0f) * f->sr));
     if (pre < 1u)
         pre = 1u;
     if (pre > MBFX_PRE_LEN - 1u)
@@ -195,7 +251,7 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
     f->r_on = (uint32_t)r_on;
     f->d_pp_was = pp;
     f->alive = 0.0f;
-    if (!d_on && !r_on && !f->r_run)
+    if (!d_on && !r_on && !f->r_run && !full)
         return;
     f->r_scale += 0.1f * (k - f->r_scale);   /* (a size turned: eased, block by block) */
     k = f->r_scale;
@@ -230,7 +286,49 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
     for (i = 0; i < n; i++) {
         /* ORDER DLY>REV: the delay, then the reverb on its output; REV>DLY: the reverb first, the delay on its output.
          * What goes out is the wet part only (the dry, dd x rd x the input, the caller's) */
-        float x = in[i], yl = 0.0f, yr = 0.0f, rl = 0.0f, rr = 0.0f, ax, xd = x, xr = x;
+        float x = in[i], yl = 0.0f, yr = 0.0f, rl = 0.0f, rr = 0.0f, ax, xd, xr, sl = 0.0f, sr_ = 0.0f;
+        if (full) {
+            if (x_on) {                       /* 2x: the half-way sample and this one */
+                float u0 = 0.5f * (f->x_prev + x), y;
+                f->x_prev = x;
+                y = 0.5f * (shape(p->x_type, xg * u0) + shape(p->x_type, xg * x)) * xout;
+                f->x_lp += xlpc * (y - f->x_lp);
+                y = f->x_lp;
+                if (p->x_type == 2u) {        /* (its offset taken out) */
+                    float h = y - f->x_dc_x + 0.9986f * f->x_dc_y;
+                    f->x_dc_x = y;
+                    f->x_dc_y = h;
+                    y = h;
+                }
+                x = xd_ * x + xw * y;
+            }
+            sl = sr_ = x;
+            if (c_on) {                       /* a BBD's two taps on a triangle LFO, the right a phase later */
+                float tl, tr, dl, dr, a, b, ph2;
+                uint32_t di, w = f->cw;
+                f->cbuf[w] = to16(x);
+                f->c_ph += c_inc;
+                if (f->c_ph >= 1.0f) f->c_ph -= 1.0f;
+                ph2 = f->c_ph + 0.5f * p->c_phase;
+                if (ph2 >= 1.0f) ph2 -= 1.0f;
+                tl = mb_fabsf(2.0f * f->c_ph - 1.0f);    /* 0..1 */
+                tr = mb_fabsf(2.0f * ph2 - 1.0f);
+                dl = c_base + c_pp * tl;
+                dr = c_base + c_pp * tr;
+                di = (uint32_t)dl; a = dl - (float)di;
+                a = from16(f->cbuf[(w - di) & (MBFX_CHO_LEN - 1u)]) * (1.0f - a) + from16(f->cbuf[(w - di - 1u) & (MBFX_CHO_LEN - 1u)]) * a;
+                di = (uint32_t)dr; b = dr - (float)di;
+                b = from16(f->cbuf[(w - di) & (MBFX_CHO_LEN - 1u)]) * (1.0f - b) + from16(f->cbuf[(w - di - 1u) & (MBFX_CHO_LEN - 1u)]) * b;
+                f->cw = (w + 1u) & (MBFX_CHO_LEN - 1u);
+                f->c_lpl += c_lpc * (a - f->c_lpl);
+                f->c_lpr += c_lpc * (b - f->c_lpr);
+                sl = cd_ * x + cw_ * f->c_lpl;
+                sr_ = cd_ * x + cw_ * f->c_lpr;
+                x = 0.5f * (sl + sr_);
+            }
+        }
+        xd = x;
+        xr = x;
         if (rev_first) {
             if (r_on || f->r_run) {
                 float v, lo, ro, m0, m1;
@@ -417,6 +515,19 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
             }
             outL[i] += rd * dm * yl + rm * rl;
             outR[i] += rd * dm * yr + rm * rr;
+        }
+        if (full) {
+            outL[i] += dd * rd * sl;
+            outR[i] += dd * rd * sr_;
+            if (k_on) {                       /* stereo-linked, a soft knee 6 dB wide, the makeup automatic */
+                float lv = mb_fabsf(outL[i]) > mb_fabsf(outR[i]) ? mb_fabsf(outL[i]) : mb_fabsf(outR[i]);
+                float over = 6.0206f * mb_log2f(lv * KREF + 1e-6f) - p->k_thr_db, gr, g;
+                gr = over <= -3.0f ? 0.0f : over < 3.0f ? k_slope * (over + 3.0f) * (over + 3.0f) * (1.0f / 12.0f) : k_slope * over;
+                f->k_gr += (gr < f->k_gr ? k_att : k_rel) * (gr - f->k_gr);
+                g = mb_exp2f((f->k_gr + k_mk) * 0.16609640f);
+                outL[i] *= g;
+                outR[i] *= g;
+            }
         }
     }
     if (r_on)

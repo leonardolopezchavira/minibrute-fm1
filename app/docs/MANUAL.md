@@ -16,7 +16,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | Control | What it does |
 | --- | --- |
 | K1..K4 | The four parameters on screen. A fast turn moves in bigger steps. |
-| HOME, SEL, ENV, LFO, EDIT, GLO, FX | A page; pressed again, its next page (FX: TOUCH, DELAY, REVERB, FX 2; the button of the page on screen is lit) |
+| HOME, SEL, ENV, LFO, EDIT, GLO, FX | A page; pressed again, its next page (FX: TOUCH, DELAY, REVERB, FX 2, DIST, CHORUS, COMP; the button of the page on screen is lit) |
 | SELECT | Steps through every page |
 | ALGO | The mod wheel (sent as MIDI CC 1 too). Where it goes: PERFORM, WHEEL TO |
 | PRESET | The patch slot, 1..32. Turning it loads the slot (unsaved changes are dropped) |
@@ -47,6 +47,9 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | DELAY | FX | TIME | FEEDBACK | TONE | MIX |
 | REVERB | FX | DECAY | SIZE | DAMP | MIX |
 | FX 2 | FX | DLY SYNC | DLY MODE | PRE-DLY | FX ORDER |
+| DIST | FX | TYPE | DRIVE | TONE | MIX |
+| CHORUS | FX | RATE | DEPTH | STEREO | MIX |
+| COMP | FX | THRESH | RATIO | ATTACK | RELEASE |
 | ARP | ARP | MODE | OCTAVE | STEP | SWING |
 | ARP 2 | ARP (held) | TEMPO | ARP | HOLD ORD | LFO CLK |
 | SEQ | SEQ | PATTERN | LENGTH | STEP | SWING |
@@ -107,6 +110,20 @@ both at -3 dB (an equal-power crossfade, as the plugin's). Matched to the plugin
 They run on the FM-1's second core while the first plays the voice (the screen's foot shows **2C**). On a unit whose
 second core is unreliable (some are), MB-1 notices, gives it up until power-off, and runs them on the first (**1C**):
 the same sound, with less headroom. Only the effects are a block (6 ms) behind the voice; the dry sound is not.
+
+**Distortion, chorus, compressor** (0.11), measured against the plugin's: in the sound itself, the distortion first, then
+the chorus, then the delay and reverb (FX ORDER), the compressor last.
+
+- **DIST**: **TYPE** SOFT (a rounded clip: the plugin's types 12, 13), HARD (10), ASYM (lopsided, even harmonics: 6, 7)
+  or FOLD (folds back on itself as DRIVE rises: 9); **DRIVE** 0 to 48 dB (the level made up as it rises); **TONE** a
+  low-pass after it, 1 to 20 kHz; **MIX**.
+- **CHORUS**: the Juno-6's: **RATE** 0.33 to 15 Hz, **DEPTH** its sweep (up to 10 ms), **STEREO** the right's sweep
+  against the left's (180 degrees: opposite, the Juno's), **MIX**.
+- **COMP**: **THRESH** -60 to +20 dB, **RATIO** OFF (1:1) to 100:1, **ATTACK**, **RELEASE**; its makeup gain is
+  automatic. On when RATIO is above 1:1.
+
+With any of these on, the whole sound goes through the second core: it comes out a block (6 ms) later than with only
+the delay and reverb.
 
 ## The sequencer
 
@@ -212,6 +229,18 @@ sent out over USB and Bluetooth.
 | 119 | MIX | REVERB |
 | 14 | PRE-DLY | FX 2 |
 | 15 | FX ORDER | FX 2 |
+| 16 | TYPE | DIST |
+| 17 | DRIVE | DIST |
+| 18 | TONE | DIST |
+| 19 | MIX | DIST |
+| 52 | RATE | CHORUS |
+| 53 | DEPTH | CHORUS |
+| 54 | STEREO | CHORUS |
+| 55 | MIX | CHORUS |
+| 56 | THRESH | COMP |
+| 57 | RATIO | COMP |
+| 58 | ATTACK | COMP |
+| 59 | RELEASE | COMP |
 | 97 | AT VIB | TOUCH |
 | 98 | AT CUT | TOUCH |
 | 99 | PW ENV | TOUCH |

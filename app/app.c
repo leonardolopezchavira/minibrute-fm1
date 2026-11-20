@@ -22,14 +22,15 @@
 
 /* ------------------------------------------------------------- parameters --- */
 enum { T_LVL, T_BIP, T_KBD, T_CUT, T_ATT, T_DR, T_LFO, T_PW, T_USR, T_VIB, T_GLIDE, T_DB,
-       T_DTIME, T_DTONE, T_RDEC, T_RSIZE, T_RPRE, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
+       T_DTIME, T_DTONE, T_RDEC, T_RSIZE, T_RPRE, T_XDRV, T_XTONE, T_CRATE, T_CDEPTH, T_CPHASE, T_KTHR, T_KRAT,
+       T_KATT, T_KREL, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
        T_SUBOCT, T_SUBSHP, T_PLAY, T_BEND, T_ONOFF, T_ARP, T_AMODE, T_AOCT, T_ASTEP, T_ASWING, T_HORD,
-       T_LSYNC, T_TEMPO, T_SPAT, T_SLEN, T_DSYNC, T_DMODE, T_FXORD };
+       T_LSYNC, T_TEMPO, T_SPAT, T_SLEN, T_DSYNC, T_DMODE, T_FXORD, T_XTYPE };
 static const uint8_t ENUM_N[] = {[T_MODE] = 4, [T_LWAVE] = 6, [T_VTYPE] = 3, [T_WDEST] = 3, [T_SUBOCT] = 2,
                                  [T_SUBSHP] = 2, [T_PLAY] = 2, [T_BEND] = 12, [T_ONOFF] = 2,
                                  [T_ARP] = 3, [T_AMODE] = 4, [T_AOCT] = 4, [T_ASTEP] = 6, [T_ASWING] = 6, [T_HORD] = 2,
                                  [T_LSYNC] = 2, [T_TEMPO] = 231, [T_SPAT] = 8, [T_SLEN] = 64,
-                                 [T_DSYNC] = 2, [T_DMODE] = 2, [T_FXORD] = 2};
+                                 [T_DSYNC] = 2, [T_DMODE] = 2, [T_FXORD] = 2, [T_XTYPE] = 4};
 static const char *const MODE_NAME[] = {"LP", "BP", "HP", "NOTCH"};
 static const char *const LWAVE_NAME[] = {"SINE", "TRI", "SAW", "SQUARE", "S&H", "SMOOTH"};
 static const char *const VTYPE_NAME[] = {"-SQR", "SINE", "+SQR"};
@@ -47,6 +48,7 @@ static const char *const LSYNC_NAME[] = {"FREE", "ARP"};
 static const char *const DSYNC_NAME[] = {"FREE", "CLOCK"};
 static const char *const DMODE_NAME[] = {"STEREO", "PING-PONG"};
 static const char *const FXORD_NAME[] = {"DLY>REV", "REV>DLY"};
+static const char *const XTYPE_NAME[] = {"SOFT", "HARD", "ASYM", "FOLD"};
 
 enum { P_CUT, P_RES, P_BRUTE, P_FENV, P_MODE, P_KBD, P_FVEL, P_AVEL,
        P_SAW, P_SQR, P_TRI, P_SUB, P_NOISE, P_ULTRA, P_PW, P_METAL,
@@ -55,10 +57,12 @@ enum { P_CUT, P_RES, P_BRUTE, P_FENV, P_MODE, P_KBD, P_FVEL, P_AVEL,
        P_GLIDE, P_VINT, P_WDEST, P_WAMT, P_SUBOCT, P_SUBSHP, P_USRATE, P_LEVEL,
        P_ATVIB, P_ATCUT, P_PWENV, P_MTENV, P_PLAY, P_BEND, P_LRTRG,
        P_ARP, P_AMODE, P_AOCT, P_ASTEP, P_ASWING,
-       P_DTIME, P_DFB, P_DTONE, P_DMIX, P_DSYNC, P_DMODE, P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX, P_RPRE, P_FXORD, NP };
+       P_DTIME, P_DFB, P_DTONE, P_DMIX, P_DSYNC, P_DMODE, P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX, P_RPRE, P_FXORD,
+       P_XTYPE, P_XDRV, P_XTONE, P_XMIX, P_CRATE, P_CDEPTH, P_CPHASE, P_CMIX, P_KTHR, P_KRAT, P_KATT, P_KREL, NP };
 #define NP_08 47u                        /* 0.8's patches: no arpeggiator, no effects (the loader takes them still) */
 #define NP_09 52u                        /* 0.8.2 .. 0.9's: no effects */
 #define NP_10 63u                        /* 0.10's: no FX ORDER */
+#define NP_104 64u                       /* 0.10.4's: no distortion, chorus, compressor */
 #define P_NONE 0xFFu                     /* an empty place on a page */
 /* the instrument's settings (not a patch's): the tempo, the Hold order, the LFO's clock, and the sequencer's
  * pattern, length, step and swing; numbered after the patch's parameters. (The arpeggiator's Off/On/Hold, Mode,
@@ -96,6 +100,10 @@ static const param_t PARAM[NP] = {
     [P_DMIX] = {"MIX", T_LVL, 113},       [P_DSYNC] = {"DLY SYNC", T_DSYNC, 114}, [P_DMODE] = {"DLY MODE", T_DMODE, 115},
     [P_RDECAY] = {"DECAY", T_RDEC, 116},  [P_RSIZE] = {"SIZE", T_RSIZE, 117}, [P_RDAMP] = {"DAMP", T_LVL, 118},
     [P_RMIX] = {"MIX", T_LVL, 119},       [P_RPRE] = {"PRE-DLY", T_RPRE, 14},  [P_FXORD] = {"FX ORDER", T_FXORD, 15},
+    [P_XTYPE] = {"TYPE", T_XTYPE, 16},    [P_XDRV] = {"DRIVE", T_XDRV, 17},   [P_XTONE] = {"TONE", T_XTONE, 18},
+    [P_XMIX] = {"MIX", T_LVL, 19},        [P_CRATE] = {"RATE", T_CRATE, 52},  [P_CDEPTH] = {"DEPTH", T_CDEPTH, 53},
+    [P_CPHASE] = {"STEREO", T_CPHASE, 54}, [P_CMIX] = {"MIX", T_LVL, 55},     [P_KTHR] = {"THRESH", T_KTHR, 56},
+    [P_KRAT] = {"RATIO", T_KRAT, 57},     [P_KATT] = {"ATTACK", T_KATT, 58},  [P_KREL] = {"RELEASE", T_KREL, 59},
 };
 
 static const param_t GPARAM[NG] = {
@@ -127,6 +135,8 @@ static const page_t PAGE[] = {
     {"TOUCH", B_FX, {P_ATVIB, P_ATCUT, P_PWENV, P_MTENV}},
     {"DELAY", B_FX, {P_DTIME, P_DFB, P_DTONE, P_DMIX}},      {"REVERB", B_FX, {P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX}},
     {"FX 2", B_FX, {P_DSYNC, P_DMODE, P_RPRE, P_FXORD}},
+    {"DIST", B_FX, {P_XTYPE, P_XDRV, P_XTONE, P_XMIX}},       {"CHORUS", B_FX, {P_CRATE, P_CDEPTH, P_CPHASE, P_CMIX}},
+    {"COMP", B_FX, {P_KTHR, P_KRAT, P_KATT, P_KREL}},
     {"ARP", B_ARP, {P_AMODE, P_AOCT, P_ASTEP, P_ASWING}},   {"ARP 2", B_ARP, {G_TEMPO, P_ARP, G_HORD, G_LSYNC}},
     {"SEQ", B_SEQ, {G_SPAT, G_SLEN, G_SSTEP, G_SSWING}},
 };
@@ -149,6 +159,8 @@ static const uint8_t INIT_V[NP] = {
     [P_PLAY] = 0, [P_BEND] = 1, [P_LRTRG] = 0, [P_ARP] = 0, [P_AMODE] = 0, [P_AOCT] = 0, [P_ASTEP] = 1,
     [P_ASWING] = 0, [P_DTIME] = 77, [P_DFB] = 51, [P_DTONE] = 95, [P_DMIX] = 0, [P_DSYNC] = 0, [P_DMODE] = 0,
     [P_RDECAY] = 64, [P_RSIZE] = 64, [P_RDAMP] = 64, [P_RMIX] = 0, [P_RPRE] = 0, [P_FXORD] = 0,
+    [P_XTYPE] = 0, [P_XDRV] = 64, [P_XTONE] = 127, [P_XMIX] = 0, [P_CRATE] = 23, [P_CDEPTH] = 127, [P_CPHASE] = 127,
+    [P_CMIX] = 0, [P_KTHR] = 51, [P_KRAT] = 0, [P_KATT] = 64, [P_KREL] = 64,
 };
 /* the factory sounds: changes from INIT (parameter, value; 0xFF ends) */
 static const struct {
@@ -192,7 +204,8 @@ static void patch_factory(patch_t *p, uint32_t slot)
         p->v[FACTORY[slot].d[i]] = FACTORY[slot].d[i + 1u];
 }
 
-#define BANK_MAGIC 0x4D423147u           /* "MB1G": 64 parameters, FX ORDER too ("MB1F": 0.10's 63, "MB1E": 0.8.2 .. 0.9's 52,
+#define BANK_MAGIC 0x4D423148u           /* "MB1H": 76 parameters, distortion, chorus, compressor ("MB1G": 0.10.4's 64,
+                                         * "MB1F": 0.10's 63, "MB1E": 0.8.2 .. 0.9's 52,
                                          * "MB1D": 0.3 .. 0.8's 47, "MB1C": 0.2's 44, "MB1B": 0.1's 16 slots) */
 typedef struct {
     uint32_t magic;
@@ -272,6 +285,29 @@ static const char *const DSYNC_DIV[NDSYNC] = {"1/32", "1/16T", "1/16", "1/8T", "
 static const float DSYNC_BEATS[NDSYNC] = {0.125f, 1.0f / 6.0f, 0.25f, 1.0f / 3.0f, 0.375f, 0.5f, 2.0f / 3.0f, 0.75f,
                                          1.0f, 4.0f / 3.0f, 1.5f, 2.0f, 3.0f, 4.0f};
 static uint32_t dsync_ix(uint32_t x) { return x * NDSYNC / 128u; }
+/* the chorus: RATE as the plugin's Juno-6 chorus (measured: plan8b), DEPTH its sweep, STEREO the right's LFO later */
+static float crate_hz(uint32_t x)
+{
+    static const float R[7][2] = {{0.0f, 0.33f}, {0.1f, 0.33f}, {0.18f, 0.38f}, {0.3f, 0.7f}, {0.5f, 1.83f}, {0.75f, 5.37f}, {1.0f, 15.0f}};
+    float r = lvl(x);
+    uint32_t i;
+    for (i = 0; i + 2u < 7u && r > R[i + 1u][0]; i++)
+        ;
+    return R[i][1] * fm_exp2f((r - R[i][0]) / (R[i + 1u][0] - R[i][0]) * fm_log2f(R[i + 1u][1] / R[i][1]));
+}
+static float tab5(const float *t, uint32_t x)   /* 5 points over the knob: 0, 1/4, 1/2, 3/4, 1 */
+{
+    float f = lvl(x) * 4.0f;
+    uint32_t i = f >= 4.0f ? 3u : (uint32_t)f;
+    return t[i] + (t[i + 1u] - t[i]) * (f - (float)i);
+}
+static float cdepth_ms(uint32_t x) { static const float T[5] = {0.f, 0.58f, 1.81f, 3.43f, 10.1f}; return tab5(T, x); }
+static float cphase(uint32_t x) { static const float T[5] = {0.f, 0.15f, 0.24f, 0.5f, 1.0f}; return tab5(T, x); }   /* (x half
+                                                                     * a cycle: the plugin's L/R correlation) */
+static float kthr_db(uint32_t x) { return -60.0f + 80.0f * lvl(x); }
+static float kratio(uint32_t x) { return taper(TP_KRAT, x); }
+static float katt_ms(uint32_t x) { return taper(TP_KATT, x); }
+static float krel_ms(uint32_t x) { return taper(TP_KREL, x); }
 /* the LFO on the arpeggiator's clock (LFO CLK: ARP): RATE picks a note value, as the plugin's synced rates
  * (8 bars dotted .. a 64th triplet); its length in beats */
 static const char *const LSYNC_DIV[30] = {"8.D", "8", "4.D", "8.T", "4", "2.D", "4.T", "2", "1.D", "2.T", "1",
@@ -373,6 +409,18 @@ static void fx_params_from(const uint8_t *v, MBFxParams *f, float *beats)
     f->r_mix = lvl(v[P_RMIX]);
     f->r_pre_s = rpre_s(v[P_RPRE]);
     f->order = v[P_FXORD];
+    f->x_type = v[P_XTYPE];
+    f->x_drive_db = 48.0f * lvl(v[P_XDRV]);
+    f->x_tone = lvl(v[P_XTONE]);
+    f->x_mix = lvl(v[P_XMIX]);
+    f->c_rate_hz = crate_hz(v[P_CRATE]);
+    f->c_depth_ms = cdepth_ms(v[P_CDEPTH]);
+    f->c_phase = cphase(v[P_CPHASE]);
+    f->c_mix = lvl(v[P_CMIX]);
+    f->k_thr_db = kthr_db(v[P_KTHR]);
+    f->k_ratio = kratio(v[P_KRAT]);
+    f->k_att_ms = katt_ms(v[P_KATT]);
+    f->k_rel_ms = krel_ms(v[P_KREL]);
     *beats = v[P_DSYNC] ? DSYNC_BEATS[dsync_ix(v[P_DTIME])] : 0.0f;
 }
 
@@ -820,7 +868,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     if (n > APP_BLOCK)
         n = APP_BLOCK;
     uint32_t fn = fx_n;
-    int fx_run = 0, on2 = 0;
+    int fx_run = 0, on2 = 0, fx_full = 0;
     float dry;
     events();
     midi_in();
@@ -829,6 +877,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         if (fx_beats_now > 0.0f)
             q.d_time_s = fx_beats_now * 60.0f / arp_tempo_now();
         dry = mbfx_dry_gain(&q);
+        fx_full = mbfx_full(&q);
         int quiet = fx.alive < 1e-5f;        /* (the effects silent, and the voice too: nothing to do) */
         for (i = 0; quiet && i < fn; i++)
             quiet = fm_fabsf(fx_in[i]) < 1e-6f;
@@ -894,7 +943,8 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         fn = 0;
     }
     for (i = 0; i < n; i++) {
-        float y = buf[i], yl = dry * y, yr = yl;
+        float y = buf[i], yl = fx_full ? 0.0f : dry * y, yr = yl;   /* (the distortion, chorus or compressor on: all of
+                                                                     * it from the effects, a block later) */
         if (i < fn) {
             yl += fx_wl[i];
             yr += fx_wr[i];
@@ -957,7 +1007,7 @@ static uint8_t arp_posted;                   /* the arpeggiator's state the audi
 
 static int bank_migrate(void)                /* an older bank (47 or 52 parameters a patch): the rest as INIT */
 {
-    static const struct { uint32_t magic, np; } OLD[] = {{0x4D423144u, NP_08}, {0x4D423145u, NP_09}, {0x4D423146u, NP_10}};
+    static const struct { uint32_t magic, np; } OLD[] = {{0x4D423144u, NP_08}, {0x4D423145u, NP_09}, {0x4D423146u, NP_10}, {0x4D423147u, NP_104}};
     uint32_t k, i, j, size = (uint32_t)plat_store_size(OBJ_BANK);
     for (k = 0; k < sizeof OLD / sizeof OLD[0]; k++) {
         uint32_t so = 8u + OLD[k].np;
@@ -1027,7 +1077,7 @@ void app_init(void)
 /* ------------------------------------------------------------ the loader --- */
 /* patches over USB SysEx: F0 7D 4D 42 CMD ... F7 (7D: non-commercial; "MB")
  *   01 SLOT NAME[8] V[NP]   a patch into a slot (SLOT 0..31; NAME ASCII; V: each parameter 0..127, PARAM's order:
- *                           64; 0.8's 47, 0.9's 52 and 0.10's 63 taken, the rest as INIT);
+ *                           76; 0.8's 47, 0.9's 52, 0.10's 63 and 0.10.4's 64 taken, the rest as INIT);
  *                           kept in RAM until 02. The slot playing: played at once
  *   02                      the slots stored in the flash
  *   03                      the factory slots back (stored)
@@ -1058,7 +1108,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
     if (n < 4u || p[0] != 0x7Du || p[1] != 0x4Du || p[2] != 0x42u)
         return 0;
     cmd = p[3];
-    if (cmd == 1u && (n == 13u + NP || n == 13u + NP_08 || n == 13u + NP_09 || n == 13u + NP_10) && p[4] < NSLOT) {
+    if (cmd == 1u && (n == 13u + NP || n == 13u + NP_08 || n == 13u + NP_09 || n == 13u + NP_10 || n == 13u + NP_104) && p[4] < NSLOT) {
         patch_t *d = &bank.slot[p[4]];
         uint32_t nv = n - 13u;               /* (an older loader's 47 or 52: the rest as INIT) */
         for (i = 0; i < 8u; i++)
@@ -1316,6 +1366,51 @@ static void value_text(uint32_t i, uint32_t x, char *b)
         break;
     case T_FXORD:
         text_cat(b, FXORD_NAME[x & 1u]);
+        break;
+    case T_XTYPE:
+        text_cat(b, XTYPE_NAME[x & 3u]);
+        break;
+    case T_XDRV:
+        dec1_text(48.0f * lvl(x), b);
+        text_cat(b, " DB");
+        break;
+    case T_XTONE:
+        hz_text(1000.0f * fm_exp2f(4.3219281f * lvl(x)), b);
+        break;
+    case T_CRATE:
+        hz_text(crate_hz(x), b);
+        break;
+    case T_CDEPTH:
+        dec1_text(cdepth_ms(x), b);
+        text_cat(b, " MS");
+        break;
+    case T_CPHASE:
+        int_text((int32_t)(cphase(x) * 180.0f + 0.5f), b);
+        text_cat(b, " DEG");
+        break;
+    case T_KTHR: {
+        float d = kthr_db(x);
+        if (d < -0.05f) {
+            text_cat(b, "-");
+            d = -d;
+        }
+        dec1_text(d, b + (b[0] != 0));
+        text_cat(b, " DB");
+        break;
+    }
+    case T_KRAT:
+        if (x == 0u)
+            text_cat(b, "OFF");
+        else {
+            dec1_text(kratio(x), b);
+            text_cat(b, ":1");
+        }
+        break;
+    case T_KATT:
+        time_text(katt_ms(x) * 0.001f, b);
+        break;
+    case T_KREL:
+        time_text(krel_ms(x) * 0.001f, b);
         break;
     }
 }
@@ -1756,7 +1851,7 @@ static void draw(void)
     cv_begin(240, 136, C_BLACK);
     cv_text(8, 0, &FONT_XS, pg->title, C_ACCENT);
     for (i = 0; i < NPAGE; i++)              /* where the page is among them */
-        cv_rect(112 + (int32_t)i * 7, 4, 5, 4, i == set.page ? C_ACCENT : C_LINE);
+        cv_rect(108 + (int32_t)i * 6, 4, 4, 4, i == set.page ? C_ACCENT : C_LINE);
     if (seq_running || seq_rec) {            /* the sequencer: the step playing (or the next to enter) */
         const seqpat_t *pt = seq_pat();
         char o[8];

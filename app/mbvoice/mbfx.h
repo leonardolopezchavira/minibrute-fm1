@@ -14,7 +14,8 @@
 #define MBFX_DL_LEN 65536u                /* delay memory (samples): 1.48 s mono, 0.74 s each way ping-pong */
 #define MBFX_PRE_LEN 8832u                /* reverb pre-delay: 0.2 s */
 #define MBFX_REV_LEN 33536u               /* the reverb's lines together (at 44.1 kHz) */
-#define MBFX_MEM (MBFX_DL_LEN + MBFX_PRE_LEN + MBFX_REV_LEN)   /* int16 samples the caller gives */
+#define MBFX_CHO_LEN 2048u                /* the chorus's line: 46 ms */
+#define MBFX_MEM (MBFX_DL_LEN + MBFX_PRE_LEN + MBFX_REV_LEN + MBFX_CHO_LEN)   /* int16 samples the caller gives */
 
 typedef struct {
     float d_time_s;                       /* delay time (the caller works out a synced one) */
@@ -28,6 +29,12 @@ typedef struct {
     float r_mix;                          /* 0..1 (0: the reverb is off) */
     float r_pre_s;                        /* pre-delay, 0..0.2 s */
     uint32_t order;                       /* 0: delay, then reverb; 1: reverb, then delay */
+    /* in the signal itself (not sends): the distortion, the chorus (in that order, before the delay and reverb), the
+     * compressor (last). Any of them on: mbfx_full, and the whole signal comes out of mbfx_process */
+    uint32_t x_type;                      /* 0 soft, 1 hard, 2 asymmetric, 3 fold */
+    float x_drive_db, x_tone, x_mix;      /* 0..48 dB; 0..1 (a low-pass 1 k .. 20 kHz); 0..1 */
+    float c_rate_hz, c_depth_ms, c_phase, c_mix;   /* the LFO; its sweep (ms, peak to peak); L/R 0..1 (half a cycle) */
+    float k_thr_db, k_ratio, k_att_ms, k_rel_ms;   /* ratio 1: off */
 } MBFxParams;
 
 typedef struct { int16_t *buf; uint32_t len, w; } MBFxLine;
@@ -46,6 +53,11 @@ typedef struct {
     MBFxLine pre, in_ap[4], ap1[2], dl1[2], ap2[2], dl2[2];
     float r_lp_in, r_damp_st[2], r_tank_fb[2];
     float r_lc, r_ls;                    /* the tank LFO: cos, sin */
+    float x_prev, x_lp, x_dc_x, x_dc_y;   /* distortion: last input (2x), its tone, the DC blocker */
+    int16_t *cbuf;
+    uint32_t cw;
+    float c_ph, c_lpl, c_lpr;
+    float k_gr;                           /* the compressor's gain reduction now (dB, <= 0) */
     float r_scale;                        /* the size now (the tank's lines read shorter) */
 } MBFx;
 
@@ -53,6 +65,7 @@ void mbfx_init(MBFx *f, float sr, int16_t *mem);   /* mem: MBFX_MEM int16 sample
 void mbfx_set(MBFx *f, const MBFxParams *p);
 /* in: n mono samples; outL/outR: the wet part (added to, not overwritten) */
 void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n);
+int mbfx_full(const MBFxParams *p);   /* 1: the whole signal comes out of mbfx_process (outL/outR start at 0) */
 float mbfx_dry_gain(const MBFxParams *p);   /* the dry signal's share (equal-power crossfades) */
 void mbfx_clear(MBFx *f);                    /* silence (the lines zeroed) */
 
