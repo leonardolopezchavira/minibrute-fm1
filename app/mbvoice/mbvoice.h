@@ -45,6 +45,8 @@ typedef struct {
     float at_vib, at_cut;    /* 0..1 */
     /* misc */
     float glide_s_oct;
+    int   retrig;            /* 0 mono legato: a note played over a held one keeps the envelopes going; 1 mono retrig: every note restarts them */
+    int   lfo_retrig;        /* 1: the LFO restarts at every note that starts the envelopes */
     float vintage;           /* 0..1 */
     float master_db;
 } MBParams;

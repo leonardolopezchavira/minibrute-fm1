@@ -61,9 +61,21 @@ expect page 8
 tap GLO
 wait 30
 expect page 9
-tap FX
+tap GLO
 wait 30
 expect page 10
+turn K1 1
+wait 30
+expect p44 1
+turn K2 2
+wait 30
+expect p45 3
+shot voice.png
+turn K1 -1
+wait 30
+tap FX
+wait 30
+expect page 11
 # the mod wheel (ALGO) and MIDI CC 1
 turn ALGO 8
 wait 30
@@ -125,7 +137,7 @@ wait 300
 key 7 up
 wait 200
 # the loader: a patch into slot 3 over SysEx (name TESTPAT, cutoff 10, the rest 64), played, then stored
-sysex F0 7D 4D 42 01 02 54 45 53 54 50 41 54 20 0A 40 40 40 00 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 01 40 40 40 40 40 40 40 01 40 00 01 40 40 40 40 40 40 40 F7
+sysex F0 7D 4D 42 01 02 54 45 53 54 50 41 54 20 0A 40 40 40 00 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 01 40 40 40 40 40 40 40 01 40 00 01 40 40 40 40 40 40 40 00 01 00 F7
 wait 30
 expect_sysex F0 7D 4D 42 7F 01 00 F7
 sysex F0 7D 4D 42 04 02 F7

@@ -5,7 +5,7 @@
  * The panel: K1..K4 turn the four parameters of the page on screen. The page buttons pick a page, a second press
  * its second page: HOME the filter (FILTER, FILTER 2), SEL the oscillators (OSC, OSC 2), ENV the envelopes
  * (FILT ENV, AMP ENV), LFO the LFO and vibrato, EDIT the performance controls (glide, vintage, the wheel), GLO the
- * rest (sub octave and shape, Ultrasaw rate, level), FX the touch (aftertouch, PW and Metalizer envelope). SELECT
+ * rest (MORE: sub octave and shape, Ultrasaw rate, level; VOICE: legato or retrig, bend range, LFO retrigger), FX the touch (aftertouch, PW and Metalizer envelope). SELECT
  * steps through every page. ALGO is the mod wheel (MIDI CC 1 too); the keys' pressure is aftertouch. PRESET picks
  * one of 32 patch slots (the first 8 hold factory sounds until saved over), SAVE stores the patch in the slot,
  * OCT- / OCT+ the octave. Every parameter has a MIDI CC (PARAM[].cc), so a controller or a DAW can play them.
@@ -20,22 +20,25 @@
 
 /* ------------------------------------------------------------- parameters --- */
 enum { T_LVL, T_BIP, T_KBD, T_CUT, T_ATT, T_DR, T_LFO, T_PW, T_USR, T_VIB, T_GLIDE, T_DB, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
-       T_SUBOCT, T_SUBSHP };
+       T_SUBOCT, T_SUBSHP, T_PLAY, T_BEND, T_ONOFF };
 static const uint8_t ENUM_N[] = {[T_MODE] = 4, [T_LWAVE] = 6, [T_VTYPE] = 3, [T_WDEST] = 3, [T_SUBOCT] = 2,
-                                 [T_SUBSHP] = 2};
+                                 [T_SUBSHP] = 2, [T_PLAY] = 2, [T_BEND] = 12, [T_ONOFF] = 2};
 static const char *const MODE_NAME[] = {"LP", "BP", "HP", "NOTCH"};
 static const char *const LWAVE_NAME[] = {"SINE", "TRI", "SAW", "SQUARE", "S&H", "SMOOTH"};
 static const char *const VTYPE_NAME[] = {"-SQR", "SINE", "+SQR"};
 static const char *const WDEST_NAME[] = {"LFO AMT", "VIBRATO", "CUTOFF"};
 static const char *const SUBOCT_NAME[] = {"-1 OCT", "-2 OCT"};
 static const char *const SUBSHP_NAME[] = {"SQUARE", "SINE"};
+static const char *const PLAY_NAME[] = {"LEGATO", "RETRIG"};
+static const char *const ONOFF_NAME[] = {"OFF", "ON"};
 
 enum { P_CUT, P_RES, P_BRUTE, P_FENV, P_MODE, P_KBD, P_FVEL, P_AVEL,
        P_SAW, P_SQR, P_TRI, P_SUB, P_NOISE, P_ULTRA, P_PW, P_METAL,
        P_FA, P_FD, P_FS, P_FR, P_AA, P_AD, P_AS, P_AR,
        P_LRATE, P_LWAVE, P_LPITCH, P_LFILT, P_LPWM, P_LAMP, P_VRATE, P_VTYPE,
        P_GLIDE, P_VINT, P_WDEST, P_WAMT, P_SUBOCT, P_SUBSHP, P_USRATE, P_LEVEL,
-       P_ATVIB, P_ATCUT, P_PWENV, P_MTENV, NP };
+       P_ATVIB, P_ATCUT, P_PWENV, P_MTENV, P_PLAY, P_BEND, P_LRTRG, NP };
+#define P_NONE 0xFFu                     /* an empty place on a page */
 
 typedef struct {
     const char *name;
@@ -60,6 +63,7 @@ static const param_t PARAM[NP] = {
     [P_SUBSHP] = {"SUB WAVE", T_SUBSHP, 95}, [P_USRATE] = {"US RATE", T_USR, 96}, [P_LEVEL] = {"LEVEL", T_DB, 7},
     [P_ATVIB] = {"AT VIB", T_LVL, 97}, [P_ATCUT] = {"AT CUT", T_LVL, 98}, [P_PWENV] = {"PW ENV", T_BIP, 99},
     [P_MTENV] = {"MTL ENV", T_BIP, 100},
+    [P_PLAY] = {"PLAY", T_PLAY, 102},   [P_BEND] = {"BEND", T_BEND, 103},  [P_LRTRG] = {"LFO RTRG", T_ONOFF, 104},
 };
 
 static int is_enum(uint32_t t) { return t >= T_MODE; }
@@ -76,6 +80,7 @@ static const page_t PAGE[] = {
     {"FILT ENV", B_ENV, {P_FA, P_FD, P_FS, P_FR}},           {"AMP ENV", B_ENV, {P_AA, P_AD, P_AS, P_AR}},
     {"LFO", B_LFO, {P_LRATE, P_LWAVE, P_LPITCH, P_LFILT}},   {"LFO 2", B_LFO, {P_LPWM, P_LAMP, P_VRATE, P_VTYPE}},
     {"PERFORM", B_EDIT, {P_GLIDE, P_VINT, P_WDEST, P_WAMT}}, {"MORE", B_GLO, {P_SUBOCT, P_SUBSHP, P_USRATE, P_LEVEL}},
+    {"VOICE", B_GLO, {P_PLAY, P_BEND, P_LRTRG, P_NONE}},
     {"TOUCH", B_FX, {P_ATVIB, P_ATCUT, P_PWENV, P_MTENV}},
 };
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
@@ -94,6 +99,7 @@ static const uint8_t INIT_V[NP] = {
     [P_AS] = 127, [P_AR] = 5, [P_LRATE] = 51, [P_LWAVE] = 0, [P_LPITCH] = 64, [P_LFILT] = 64, [P_LPWM] = 64,
     [P_LAMP] = 64, [P_VRATE] = 57, [P_VTYPE] = 1, [P_GLIDE] = 0, [P_VINT] = 0, [P_WDEST] = 1, [P_WAMT] = 61,
     [P_SUBOCT] = 0, [P_SUBSHP] = 0, [P_USRATE] = 31, [P_LEVEL] = 60, [P_PWENV] = 64, [P_MTENV] = 64,
+    [P_PLAY] = 0, [P_BEND] = 1, [P_LRTRG] = 0,
 };
 /* the factory sounds: changes from INIT (parameter, value; 0xFF ends) */
 static const struct {
@@ -137,14 +143,14 @@ static void patch_factory(patch_t *p, uint32_t slot)
         p->v[FACTORY[slot].d[i]] = FACTORY[slot].d[i + 1u];
 }
 
-#define BANK_MAGIC 0x4D423143u           /* "MB1C": 32 slots ("MB1B": 0.1's 16) */
+#define BANK_MAGIC 0x4D423144u           /* "MB1D": 47 parameters ("MB1C": 0.2's 44, "MB1B": 0.1's 16 slots) */
 typedef struct {
     uint32_t magic;
     patch_t slot[NSLOT];
 } bank_t;
 static bank_t bank;
 
-#define SET_MAGIC 0x4D423153u            /* "MB1S" */
+#define SET_MAGIC 0x4D423154u            /* "MB1T" ("MB1S": 0.1 .. 0.2) */
 typedef struct {
     uint32_t magic;
     int8_t octave;                       /* -2 .. +2 */
@@ -225,6 +231,8 @@ static void params_from(const uint8_t *v, MBParams *p)
     p->glide_s_oct = glide_s(v[P_GLIDE]);
     p->vintage = lvl(v[P_VINT]);
     p->master_db = level_db(v[P_LEVEL]) + LEVEL_OFFSET_DB;
+    p->retrig = v[P_PLAY];
+    p->lfo_retrig = v[P_LRTRG];
 }
 
 /* ----------------------------------------------------------------- engine --- */
@@ -253,6 +261,7 @@ static volatile int32_t voice_note = -1;     /* the note sounding, for the scree
 static volatile uint8_t wheel_now, at_now;   /* 0..127, for the screen (from the panel or MIDI) */
 static volatile uint8_t cc_req[NP];          /* a parameter MIDI changed: value | 0x80, for the main loop */
 static volatile uint32_t midi_count;
+static volatile uint8_t bend_range = 2;     /* semitones (the patch's BEND) */
 
 static void events(void)                     /* audio interrupt */
 {
@@ -341,7 +350,7 @@ static void midi_in(void)                    /* audio interrupt */
             at_now = (uint8_t)d1;
             break;
         case 0xE0u:                          /* +-2 semitones */
-            mb_set_bend(&voice, (float)((int32_t)(d1 | d2 << 7) - 8192) * (2.0f / 8192.0f));
+            mb_set_bend(&voice, (float)((int32_t)(d1 | d2 << 7) - 8192) * (float)bend_range * (1.0f / 8192.0f));
             break;
         default:
             break;
@@ -388,6 +397,7 @@ static void params_post(void)                /* set.cur to the engine */
     uint32_t gen = par_posted + 1u;
     par_ix ^= 1u;
     params_from(set.cur.v, &par[par_ix]);
+    bend_range = (uint8_t)(set.cur.v[P_BEND] + 1u);
     par_posted = gen;
     post(Q_PAR, par_ix, gen & 0xFFFFu);
 }
@@ -652,6 +662,16 @@ static void value_text(uint32_t i, uint32_t x, char *b)
     case T_SUBSHP:
         text_cat(b, SUBSHP_NAME[x & 1u]);
         break;
+    case T_PLAY:
+        text_cat(b, PLAY_NAME[x & 1u]);
+        break;
+    case T_BEND:
+        int_text((int32_t)x + 1, b);
+        text_cat(b, " ST");
+        break;
+    case T_ONOFF:
+        text_cat(b, ONOFF_NAME[x & 1u]);
+        break;
     }
 }
 
@@ -832,7 +852,10 @@ static void input(void)
             app_say("PATCH", t);
         } else {                             /* K1..K4: the page's parameters; a fast turn moves further */
             uint32_t q = k - EN_K1, p = PAGE[set.page].p[q];
-            int32_t step = is_enum(PARAM[p].type) ? (e > 0 ? 1 : -1) : (e > 1 || e < -1 ? 3 * e : e);
+            int32_t step;
+            if (p == P_NONE)
+                continue;
+            step = is_enum(PARAM[p].type) ? (e > 0 ? 1 : -1) : (e > 1 || e < -1 ? 3 * e : e);
             param_set(p, (int32_t)set.cur.v[p] + step);
             ui.turned_at[q] = plat_ms();
             if (ann_on()) {
@@ -917,10 +940,13 @@ static void draw(void)
     for (i = 0; i < NPAGE; i++)              /* where the page is among them */
         cv_rect(132 + (int32_t)i * 9, 4, 7, 4, i == set.page ? C_ACCENT : C_LINE);
     for (i = 0; i < 4u; i++) {
-        uint32_t p = pg->p[i], v = set.cur.v[p];
+        uint32_t p = pg->p[i], v;
         int32_t x = 4 + (int32_t)(i % 2u) * 118, y = 18 + (int32_t)(i / 2u) * 58;
         int lit = ui.turned_at[i] && now - ui.turned_at[i] < 400u;
         char k[4] = "K1";
+        if (p == P_NONE)
+            continue;
+        v = set.cur.v[p];
         k[1] = (char)('1' + i);
         cv_rect(x, y, 114, 54, lit ? C_LINE : C_BLACK);
         cv_text(x + 4, y + 3, &FONT_XS, k, C_DIM);

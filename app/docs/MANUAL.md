@@ -38,6 +38,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | LFO 2 | LFO | PWM/MTL | AMP | VIB RATE | VIB TYPE |
 | PERFORM | EDIT | GLIDE | VINTAGE | WHEEL TO | WHL AMT |
 | MORE | GLO | SUB OCT | SUB WAVE | US RATE | LEVEL |
+| VOICE | GLO | PLAY | BEND | LFO RTRG |  |
 | TOUCH | FX | AT VIB | AT CUT | PW ENV | MTL ENV |
 
 Notes on a few of them:
@@ -47,6 +48,9 @@ Notes on a few of them:
 - **BRUTE** (FILTER) feeds the filter's output back into its input: growl, then chaos.
 - **WHEEL TO** (PERFORM) is the Minibrute's mod wheel destination: LFO AMT, VIBRATO or CUTOFF; **WHL AMT** how far.
 - **VINTAGE** (PERFORM) detunes each note a little, the way an old oscillator drifts.
+- **PLAY** (VOICE): LEGATO, a note played while another is held keeps the envelopes going (and glides); RETRIG, every
+  note restarts them. **BEND** is the pitch bend's range, 1..12 semitones. **LFO RTRG** restarts the LFO with each
+  note that starts the envelopes.
 
 ## The patches
 
@@ -66,7 +70,7 @@ MB-1 takes patches over USB MIDI SysEx (`F0 7D 4D 42 ...`, app/app.c "the loader
 slots stored, a slot played, the factory patches back. Each frame is answered.
 
 
-MB-1 plays from USB, Bluetooth and TRS MIDI on any channel: notes, pitch bend (±2 semitones), the mod wheel (CC 1),
+MB-1 plays from USB, Bluetooth and TRS MIDI on any channel: notes, pitch bend (VOICE: BEND, 1..12 semitones), the mod wheel (CC 1),
 aftertouch (channel or poly), all notes off (CC 120, 123), and every parameter by its CC. The keys and the knobs are
 sent out over USB and Bluetooth.
 
@@ -112,6 +116,9 @@ sent out over USB and Bluetooth.
 | 95 | SUB WAVE | MORE |
 | 96 | US RATE | MORE |
 | 7 | LEVEL | MORE |
+| 102 | PLAY | VOICE |
+| 103 | BEND | VOICE |
+| 104 | LFO RTRG | VOICE |
 | 97 | AT VIB | TOUCH |
 | 98 | AT CUT | TOUCH |
 | 99 | PW ENV | TOUCH |

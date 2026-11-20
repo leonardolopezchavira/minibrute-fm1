@@ -219,10 +219,10 @@ void mb_note_on(MBVoice *v, int note, int vel) {
     v->target_st = (float)note + cents / 100.f;
     if (!legato || v->p.glide_s_oct <= 0.f) v->pitch_st = v->target_st;
     if (v->p.glide_s_oct > 0.f && legato == 0 && v->aenv > 0.0001f) { /* glide from last pitch */ }
-    if (!legato) {
+    if (!legato || v->p.retrig) {           /* the envelopes restart (from where they are: no click) */
         v->ast = 1; v->fst = 1;
         if (v->aenv <= 0.f) { v->ph = 0.f; }
-        v->lfo_ph = v->lfo_ph;  /* free-running */
+        if (v->p.lfo_retrig) v->lfo_ph = 0.f;   /* else free-running */
     }
 }
 
