@@ -252,6 +252,10 @@ function fader(p, cx, top, h, name, icon) {
   const g = el("g", { class: "ctl fader", transform: `translate(${cx},${top})`, tabindex: 0, role: "slider" }, sheet);
   el("rect", { class: "ring", x: -30, y: -12, width: 60, height: h + 24, rx: 6 }, g);
   el("rect", { x: -9, y: 0, width: 18, height: h, rx: 9, fill: C.cap }, g);
+  for (let k = 0; k <= 10; k++) {   /* a scale beside it: eleven ticks, longer at the ends and the middle */
+    const ty = h * k / 10, long = k % 5 === 0;
+    el("line", { x1: long ? -36 : -32, y1: ty, x2: -16, y2: ty, stroke: C.ink, "stroke-width": long ? 2.6 : 1.8, "stroke-linecap": "round" }, g);
+  }
   el("rect", { x: -40, y: -14, width: 80, height: h + 28, fill: "transparent" }, g);   /* (the grab area) */
   const cap = el("rect", { x: -24, y: -9, width: 48, height: 18, rx: 2, fill: C.ink }, g);
   if (icon) icon(g, 0, h + 32); else label(g, 0, h + 38, name, 17);
