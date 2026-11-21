@@ -964,3 +964,20 @@ tap HOME
 wait 600
 tap HOME
 wait 100
+# SAVE with a new name: K2 a step back on the 1st letter (INIT -> HNIT); K1 two on, K2 a step on (HNJT)
+turn PRESET 1
+wait 30
+turn PRESET -1
+wait 30
+tap SAVE
+wait 30
+turn K2 -1
+wait 30
+turn K1 2
+wait 30
+turn K2 1
+wait 30
+shot savename.png
+tap SAVE
+wait 50
+expect edited 0

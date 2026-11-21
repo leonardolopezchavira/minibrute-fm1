@@ -1108,7 +1108,15 @@ static void patch_random(void)
     for (i = 0; i < NP; i++)
         if (v[i] > pmax(i))
             v[i] = (uint8_t)pmax(i);
-    patch_name(&set.cur, "RANDOM");
+    {   /* RND001, RND002 ... (as sq80-fm1 names its random programs) */
+        static uint32_t rnd_n;
+        char nm[9] = "RND000";
+        rnd_n = rnd_n % 999u + 1u;
+        nm[3] = (char)('0' + rnd_n / 100u);
+        nm[4] = (char)('0' + rnd_n / 10u % 10u);
+        nm[5] = (char)('0' + rnd_n % 10u);
+        patch_name(&set.cur, nm);
+    }
     set.edited = 1;
     set_dirty = 1;
     params_stale = 1;
@@ -1137,8 +1145,21 @@ static void page_button(uint32_t b)          /* its page; pressed again, its oth
 /* SAVE: a first press picks where (PRESET turns through the 128 slots, the patch's own first), SAVE again stores
  * it there (and plays from there), any other button leaves it */
 static struct {
-    uint8_t on, to;
+    uint8_t on, to, pos;                     /* (pos: the name's letter K1 is on) */
+    char was[8];                             /* the name before (a cancel puts it back) */
 } sv;
+static const char NAME_CH[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-#&+.!";   /* what K2 steps through */
+#define NNAME_CH (sizeof NAME_CH - 1u)
+static void name_step(int32_t e)             /* the letter under the cursor, e steps on */
+{
+    char *c = &set.cur.name[sv.pos & 7u];
+    uint32_t i;
+    for (i = 0; i < NNAME_CH && NAME_CH[i] != *c; i++)
+        ;
+    if (i == NNAME_CH)
+        i = 0;
+    *c = NAME_CH[(uint32_t)((int32_t)i + (int32_t)NNAME_CH * 8 + e) % NNAME_CH];
+}
 static void slot_text(uint32_t s, char *b)   /* "B03 ACID" */
 {
     const patch_t *p = &SLOT(s);
@@ -1319,13 +1340,18 @@ static void input(void)
             octave_step(1);
         else if (sv.on && k != B_SAVE) {    /* any other button: no save */
             sv.on = 0;
+            for (uint32_t c = 0; c < 8u; c++)
+                set.cur.name[c] = sv.was[c];
             app_say("SAVE", "CANCELLED");
             ui.redraw = 1;
         } else if (k == B_SAVE) {
             if (!sv.on) {
                 sv.on = 1;
                 sv.to = set.slot;
-                app_say("SAVE", "PICK A SLOT");
+                sv.pos = 0;
+                for (uint32_t c = 0; c < 8u; c++)
+                    sv.was[c] = set.cur.name[c];
+                app_say("SAVE", "NAME AND SLOT");
             } else {
                 sv.on = 0;
                 save();
@@ -1415,6 +1441,12 @@ static void input(void)
             slot_load((set.slot + NSLOT + (uint32_t)(e > 0 ? 1 : NSLOT - 1)) % NSLOT);
             name_text(&set.cur, t);
             app_say("PATCH", t);
+        } else if (sv.on) {                  /* saving: K1 the letter's place, K2 the letter */
+            if (k == EN_K1)
+                sv.pos = (uint8_t)(((int32_t)sv.pos + 64 + e) & 7);
+            else if (k == EN_K2)
+                name_step(e);
+            ui.redraw = 1;
         } else {                             /* K1..K4: the page's parameters; a fast turn moves further */
             uint32_t q = k - EN_K1, p = PAGE[set.page].p[q];
             int32_t step;
@@ -1596,15 +1628,21 @@ static void draw(void)
     cv_blit(0, 0);
     /* the page: its title, and its four parameters (K1..K4), lit a moment after a turn */
     cv_begin(240, 136, C_BLACK);
-    if (sv.on) {                             /* saving: from, to, and how */
-        name_text(&set.cur, t);
+    if (sv.on) {                             /* saving: the name (K1, K2), where (PRESET), and how */
+        uint32_t c;
         cv_text(8, 0, &FONT_XS, "SAVE", C_ACCENT);
-        cv_text(8, 18, &FONT_XS, "THIS PATCH", C_GRAY);
-        cv_text(8, 32, &FONT_B, t, C_WHITE);
-        cv_text(8, 58, &FONT_XS, sv.to == set.slot ? "INTO ITS OWN SLOT" : "INTO SLOT (REPLACES)", C_GRAY);
+        cv_text(60, 0, &FONT_XS, "NAME  K1: MOVE  K2: LETTER", C_GRAY);
+        for (c = 0; c < 8u; c++) {           /* the name, a letter a cell, the one K1 is on underlined */
+            char ch[2] = {set.cur.name[c], 0};
+            int32_t x = 8 + (int32_t)c * 28;
+            if (ch[0] != ' ')
+                cv_text(x + (24 - text_w(&FONT_M, ch)) / 2, 16, &FONT_M, ch, C_WHITE);
+            cv_rect(x, 44, 24, c == sv.pos ? 3 : 1, c == sv.pos ? C_ACCENT : C_LINE);
+        }
+        cv_text(8, 56, &FONT_XS, sv.to == set.slot ? "INTO ITS OWN SLOT" : "INTO SLOT (REPLACES)", C_GRAY);
         slot_text(sv.to, t);
         cv_text(8, 72, &FONT_M, t, C_ACCENT);
-        cv_text(8, 108, &FONT_XS, "PRESET: PICK  SAVE: STORE", C_GRAY);
+        cv_text(8, 108, &FONT_XS, "PRESET: SLOT  SAVE: STORE", C_GRAY);
         cv_text(8, 122, &FONT_XS, "OTHER BUTTON: CANCEL", C_DIM);
         cv_blit(0, 36);
         goto foot;
