@@ -1014,6 +1014,109 @@ static void page_show(uint32_t pg)
     app_say(PAGE[set.page].title, "");
 }
 
+/* RANDOM (HOME three times in a row): a new patch, every parameter picked at random within what sounds: at least
+ * one oscillator up, the amp envelope heard, the filter open enough, the effects and the rarer sources now and
+ * then. LEVEL, BEND and the arpeggiator stay as they were; the patch is new (edited, in no slot until SAVE) */
+static uint32_t rnd_s = 0x2545F491u;
+static uint32_t rnd(uint32_t n)              /* 0 .. n-1 */
+{
+    rnd_s ^= rnd_s << 13;
+    rnd_s ^= rnd_s >> 17;
+    rnd_s ^= rnd_s << 5;
+    return n ? (rnd_s >> 8) % n : 0u;
+}
+static uint8_t rr(uint32_t lo, uint32_t hi) { return (uint8_t)(lo + rnd(hi - lo + 1u)); }
+static uint8_t rchance(uint32_t pct, uint32_t lo, uint32_t hi, uint32_t other)   /* pct % of the time lo..hi */
+{
+    return rnd(100) < pct ? rr(lo, hi) : (uint8_t)other;
+}
+static uint8_t rbip(uint32_t pct, uint32_t span)   /* 64, or pct % of the time 64 +- up to span */
+{
+    return rnd(100) < pct ? (uint8_t)(64 + (int32_t)rr(0, 2u * span) - (int32_t)span) : 64u;
+}
+static void patch_random(void)
+{
+    uint8_t *v = set.cur.v, keep_lvl = v[P_LEVEL], keep_bend = v[P_BEND], keep_arp = v[P_ARP];
+    uint32_t i;
+    rnd_s ^= plat_ms() * 2654435761u + 1u;
+    for (i = 0; i < NP; i++)                 /* the choices first: any of their positions */
+        if (is_enum(PARAM[i].type))
+            v[i] = (uint8_t)rnd(pmax(i) + 1u);
+    v[P_MODE] = rnd(100) < 65u ? 0u : (uint8_t)rnd(4);
+    v[P_CUT] = v[P_MODE] == 2u ? rr(30, 80) : v[P_MODE] == 1u ? rr(55, 100) : rr(45, 118);   /* (HP and BP: where they pass) */
+    v[P_RES] = rr(0, 105);
+    v[P_BRUTE] = rchance(55, 0, 100, 0);
+    v[P_FENV] = rr(50, 127);
+    v[P_KBD] = rr(0, 70);
+    v[P_FVEL] = rchance(30, 0, 90, 0);
+    v[P_AVEL] = rchance(40, 0, 90, 0);
+    v[P_SAW] = rchance(60, 30, 127, 0);
+    v[P_SQR] = rchance(50, 30, 127, 0);
+    v[P_TRI] = rchance(40, 30, 127, 0);
+    if (v[P_SAW] < 80u && v[P_SQR] < 80u && v[P_TRI] < 80u)   /* one of them up */
+        v[P_SAW + rnd(3)] = rr(90, 127);
+    v[P_SUB] = rchance(50, 20, 127, 0);
+    v[P_NOISE] = rchance(15, 10, 80, 0);
+    v[P_ULTRA] = rchance(30, 20, 127, 0);
+    v[P_USRATE] = rr(0, 90);
+    v[P_PW] = rr(0, 110);
+    v[P_PWENV] = rbip(30, 50);
+    v[P_METAL] = rchance(35, 10, 127, 0);
+    v[P_MTENV] = rbip(30, 50);
+    v[P_FA] = rchance(30, 10, 70, 0);
+    v[P_FD] = rr(10, 85);
+    v[P_FS] = rr(0, 127);
+    v[P_FR] = rr(5, 60);
+    v[P_AA] = rchance(25, 5, 60, 0);
+    v[P_AD] = rr(10, 85);
+    v[P_AS] = rr(50, 127);
+    v[P_AR] = rr(5, 60);
+    v[P_LRATE] = rr(20, 100);
+    v[P_LPITCH] = rbip(15, 12);
+    v[P_LFILT] = rbip(45, 50);
+    v[P_LPWM] = rbip(35, 50);
+    v[P_LAMP] = rbip(15, 25);
+    v[P_VRATE] = rr(30, 90);
+    v[P_GLIDE] = rchance(25, 5, 45, 0);
+    v[P_VINT] = rchance(40, 0, 50, 0);
+    v[P_WAMT] = rr(20, 100);
+    v[P_ATVIB] = rchance(30, 0, 60, 0);
+    v[P_ATCUT] = rchance(30, 0, 60, 0);
+    v[P_DTIME] = rr(20, 110);
+    v[P_DFB] = rr(20, 95);
+    v[P_DTONE] = rr(40, 127);
+    v[P_DMIX] = rchance(45, 10, 60, 0);
+    v[P_RDECAY] = rr(20, 110);
+    v[P_RSIZE] = rr(20, 120);
+    v[P_RDAMP] = rr(20, 110);
+    v[P_RMIX] = rchance(50, 10, 60, 0);
+    v[P_RPRE] = rr(0, 60);
+    v[P_XDRV] = rr(10, 100);
+    v[P_XTONE] = rr(60, 127);
+    v[P_XMIX] = rchance(30, 15, 110, 0);
+    v[P_CRATE] = rr(0, 90);
+    v[P_CDEPTH] = rr(30, 127);
+    v[P_CPHASE] = rr(60, 127);
+    v[P_CMIX] = rchance(30, 20, 100, 0);
+    v[P_KTHR] = rr(30, 90);
+    v[P_KRAT] = rchance(25, 20, 80, 0);
+    v[P_KATT] = rr(10, 90);
+    v[P_KREL] = rr(10, 90);
+    v[P_LEVEL] = keep_lvl;
+    v[P_BEND] = keep_bend;
+    v[P_ARP] = keep_arp;
+    for (i = 0; i < NP; i++)
+        if (v[i] > pmax(i))
+            v[i] = (uint8_t)pmax(i);
+    patch_name(&set.cur, "RANDOM");
+    set.edited = 1;
+    set_dirty = 1;
+    params_stale = 1;
+    page_show(0);
+    app_say("RANDOM", "A NEW PATCH");
+}
+static uint32_t home_taps, home_last_ms;
+
 static void page_button(uint32_t b)          /* its page; pressed again, its other page */
 {
     uint32_t i, first = NPAGE;
@@ -1031,9 +1134,27 @@ static void page_button(uint32_t b)          /* its page; pressed again, its oth
         page_show(first);
 }
 
+/* SAVE: a first press picks where (PRESET turns through the 128 slots, the patch's own first), SAVE again stores
+ * it there (and plays from there), any other button leaves it */
+static struct {
+    uint8_t on, to;
+} sv;
+static void slot_text(uint32_t s, char *b)   /* "B03 ACID" */
+{
+    const patch_t *p = &SLOT(s);
+    uint32_t i, n = 0;
+    b[n++] = (char)('A' + s / BANK_N);
+    b[n++] = (char)('0' + (s % BANK_N + 1u) / 10u);
+    b[n++] = (char)('0' + (s % BANK_N + 1u) % 10u);
+    b[n++] = ' ';
+    for (i = 0; i < 8u && p->name[i] != ' '; i++)
+        b[n++] = p->name[i];
+    b[n] = 0;
+}
 static void save(void)
 {
     char t[16];
+    set.slot = (uint8_t)(sv.to % NSLOT);
     SLOT(set.slot) = set.cur;
     bank_dirty |= (uint8_t)(1u << (set.slot / BANK_N));
     set.edited = 0;
@@ -1196,8 +1317,21 @@ static void input(void)
             octave_step(-1);
         else if (k == B_OCTUP)
             octave_step(1);
-        else if (k == B_SAVE)
-            save();
+        else if (sv.on && k != B_SAVE) {    /* any other button: no save */
+            sv.on = 0;
+            app_say("SAVE", "CANCELLED");
+            ui.redraw = 1;
+        } else if (k == B_SAVE) {
+            if (!sv.on) {
+                sv.on = 1;
+                sv.to = set.slot;
+                app_say("SAVE", "PICK A SLOT");
+            } else {
+                sv.on = 0;
+                save();
+            }
+            ui.redraw = 1;
+        }
         else if (k == B_ARP) {               /* (on release: a long press is its pages) */
             arp_down_ms = plat_ms();
             arp_long = 0;
@@ -1212,6 +1346,16 @@ static void input(void)
             page_button(k);
             pg_btn = k;
             pg_down_ms = plat_ms();
+            if (k == B_HOME) {               /* HOME three times in a row, each within 400 ms: RANDOM */
+                home_taps = plat_ms() - home_last_ms < 400u ? home_taps + 1u : 1u;
+                home_last_ms = plat_ms();
+                if (home_taps >= 3u) {
+                    home_taps = 0;
+                    patch_random();
+                }
+            } else {
+                home_taps = 0;
+            }
         }
     }
     if (pg_btn < NB && (btn & 1u << pg_btn) && plat_ms() - pg_down_ms >= 500u) {   /* held: its first page */
@@ -1264,6 +1408,9 @@ static void input(void)
             plat_midi_send(0x0Bu | 0xB0u << 8 | 1u << 16 | (uint32_t)w << 24, TO_USB | TO_BLE);
             int_text(w, t);
             app_say("MOD WHEEL", t);
+        } else if (k == EN_PRESET && sv.on) {   /* where to save */
+            sv.to = (uint8_t)(((int32_t)sv.to + (int32_t)NSLOT * 4 + e) % (int32_t)NSLOT);
+            ui.redraw = 1;
         } else if (k == EN_PRESET) {
             slot_load((set.slot + NSLOT + (uint32_t)(e > 0 ? 1 : NSLOT - 1)) % NSLOT);
             name_text(&set.cur, t);
@@ -1449,6 +1596,19 @@ static void draw(void)
     cv_blit(0, 0);
     /* the page: its title, and its four parameters (K1..K4), lit a moment after a turn */
     cv_begin(240, 136, C_BLACK);
+    if (sv.on) {                             /* saving: from, to, and how */
+        name_text(&set.cur, t);
+        cv_text(8, 0, &FONT_XS, "SAVE", C_ACCENT);
+        cv_text(8, 18, &FONT_XS, "THIS PATCH", C_GRAY);
+        cv_text(8, 32, &FONT_B, t, C_WHITE);
+        cv_text(8, 58, &FONT_XS, sv.to == set.slot ? "INTO ITS OWN SLOT" : "INTO SLOT (REPLACES)", C_GRAY);
+        slot_text(sv.to, t);
+        cv_text(8, 72, &FONT_M, t, C_ACCENT);
+        cv_text(8, 108, &FONT_XS, "PRESET: PICK  SAVE: STORE", C_GRAY);
+        cv_text(8, 122, &FONT_XS, "OTHER BUTTON: CANCEL", C_DIM);
+        cv_blit(0, 36);
+        goto foot;
+    }
     cv_text(8, 0, &FONT_XS, pg->title, C_ACCENT);
     {   /* where the page is among its button's: a dot each, right-aligned */
         uint32_t n = 0, at = 0;
@@ -1495,6 +1655,7 @@ static void draw(void)
         }
     }
     cv_blit(0, 36);
+foot:
     /* the foot: the wheel, the pressure, the octave, and the scope */
     cv_begin(240, 64, C_BLACK);
     cv_text(4, 2, &FONT_XS, "WHEEL", C_GRAY);

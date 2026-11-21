@@ -115,11 +115,52 @@ turn K2 5
 wait 30
 tap SAVE
 wait 50
+expect edited 1
+shot save.png
+tap SAVE
+wait 50
 expect edited 0
 expect dirty 0
 reboot
 wait 600
 expect slot 1
+expect p1 45
+# SAVE elsewhere: SAVE, PRESET to B02 (slot 33), SAVE: stored there and played from there; A02 kept
+turn K2 5
+wait 30
+tap SAVE
+wait 30
+spin PRESET 32
+wait 30
+shot saveto.png
+tap SAVE
+wait 50
+expect slot 33
+expect edited 0
+expect p1 50
+reboot
+wait 600
+expect slot 33
+expect p1 50
+turn PRESET -32
+wait 30
+expect slot 1
+expect p1 45
+# SAVE, then another button: cancelled, nothing stored
+turn K2 5
+wait 30
+tap SAVE
+wait 30
+spin PRESET 5
+wait 30
+tap HOME
+wait 30
+expect slot 1
+expect edited 1
+turn PRESET 1
+wait 30
+turn PRESET -1
+wait 30
 expect p1 45
 # every factory slot sounds
 turn PRESET 1
@@ -901,3 +942,25 @@ wait 50
 sysex F0 7D 4D 42 04 00 F7
 wait 50
 expect slot 0
+# RANDOM: HOME three times in a row: a new patch (RANDOM, edited, in no slot), the FILTER page; it sounds
+tap HOME
+wait 150
+tap HOME
+wait 150
+tap HOME
+wait 100
+expect page 0
+expect edited 1
+shot random.png
+key 7 down
+wait 400
+expect outpeak >5
+key 7 up
+wait 300
+# HOME three times slowly: just the pages
+tap HOME
+wait 600
+tap HOME
+wait 600
+tap HOME
+wait 100

@@ -23,10 +23,11 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | --- | --- |
 | K1..K4 | The four parameters on screen. A fast turn moves in bigger steps. |
 | HOME, SEL, ENV, LFO, EDIT, GLO, FX | A section of the patch sheet: its first page; pressed again, its next page. Held half a second: back to its first page. The dots at the top right: the button's pages, the one on screen lit. GLO holds the instrument's own settings (not the patch's) |
+| HOME three times | RANDOM: HOME pressed three times in a row (each within 0.4 s) makes a new patch with random settings, named RANDOM and not in any slot until you SAVE it. Every one sounds: an oscillator up, the amp envelope heard, the filter where its mode passes; the rarer sources and the effects now and then. LEVEL, BEND and the arpeggiator stay as they were |
 | SELECT | Steps through every page |
 | ALGO | The mod wheel (sent as MIDI CC 1 too). Where it goes: CONTROLS (EDIT), WHEEL TO |
 | PRESET | The patch slot, A01..D32: 128 slots in four banks of 32. Turning it loads the slot (unsaved changes are dropped) |
-| SAVE | Stores the patch in its slot, and the settings (lit when there is something to save) |
+| SAVE | Pressed once: where to save (the screen shows this patch and the slot it goes to, its own first). Turn PRESET to pick any of the 128 slots, then SAVE again stores it there (and plays from there; the settings too). Any other button cancels. Lit when there is something to save |
 | OCT- / OCT+ | The keyboard's octave, -2..+2 |
 | ARP | The arpeggiator: OFF, ON, HOLD in turn (and its page). Held half a second: its pages, ARP and ARP 2. Lit while it runs, dark a moment on each beat |
 | SEQ | The sequencer's page |
@@ -165,7 +166,7 @@ seconds after a change, while stopped; SAVE also stores them) and kept over powe
 ## The patches
 
 128 slots in four banks of 32, A01..D32: turn PRESET to pick one. Slots A01..A08 start with factory sounds: INIT, BASS, ACID, METALEAD, ULTRAPAD, PERC, BRASS, WOBBLE; the rest
-start as INIT. SAVE writes over the slot shown. (Before 0.12 there were 32 slots: they are bank A now, as they were.) The
+start as INIT. SAVE, PRESET, SAVE stores the patch in any slot (SAVE twice: its own). (Before 0.12 there were 32 slots: they are bank A now, as they were.) The
 patch editor (below) reads, edits and stores all of them, and keeps banks as .syx files.
 
 ## The knobs' range
