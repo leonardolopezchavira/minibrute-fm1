@@ -182,7 +182,20 @@ The site's [patch editor](../edit/) is a MiniBrute-style patch sheet that plays:
 panel, drawn like the paper sheets MiniBrute players fill in and share, in light or dark. It sounds in the browser with MB-1's own engine (the arpeggiator too, at the editor's
 tempo) and, with the FM-1 connected by USB (Chrome or Edge), on the FM-1 as you turn each control. It reads the
 FM-1's 128 slots (banks A..D) and the sound playing, stores a patch in a slot, writes a whole bank, opens and saves
-.syx files, and exports the sheet as SVG or PNG, or prints it. Reading the FM-1 needs MB-1 0.11.4 or later, all 128
+.syx files, and exports the sheet as SVG or PNG, or prints it.
+
+**Read a sheet** loads a patch from a picture of a patch sheet, in the browser (nothing is uploaded):
+
+- MB-1's own sheets (the editor's SVG and PNG carry the patch inside them): exactly.
+- [electric-himalaya.com](https://www.electric-himalaya.com/demos/arturia_minibrute/)'s MiniBrute sheets (the pictures
+  with yellow dots): the dots, the faders, the switches, the filter mode's letters, the LFO's wave.
+- Ultimate Patches' sheets: a PDF (every page, its title as the name; **All into the slots** puts them in the slot list
+  from the one picked), or a picture of a page.
+
+A window shows the sheet with what was read on it: green read, orange told apart by its shape or a switch whose order is
+a guess (check those by ear: they keep a dashed ring on the editor's sheet until you touch them), grey not on the
+sheet (INIT's value). The MiniBrute's PHONES, MASTER, FINE TUNE, AUDIO IN, ENV SPEED, CLOCK, TEMPO and OCTAVE are left
+out, and MB-1's effects stay off. Photographs of a sheet or of a MiniBrute are not read yet. Reading the FM-1 needs MB-1 0.11.4 or later, all 128
 slots 0.12 or later. Every control on the sheet has its CC (below): a controller or a DAW can play them the same way.
 
 ## Loading patches from a computer

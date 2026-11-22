@@ -57,6 +57,18 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
   .sheet .ctl.sw { cursor: pointer; }
   .sheet .ctl:focus-visible .ring, .sheet .ctl.act .ring { stroke: var(--hi); stroke-width: 4; }
   .sheet .ring { fill: none; stroke: transparent; }
+  .sheet .ctl.guess .ring { stroke: var(--hi); stroke-width: 3; stroke-dasharray: 6 4; }
+  /* reading a sheet: the picture with what was read on it, then load */
+  dialog.rd { max-width: min(1100px, 96vw); width: 96vw; border: 3px solid var(--ink); border-radius: 8px; background: var(--face); color: var(--ink); padding: 16px; }
+  dialog.rd::backdrop { background: rgba(0, 0, 0, .55); }
+  dialog.rd h2 { font: 700 20px "Barlow Condensed", sans-serif; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 6px; }
+  dialog.rd canvas { width: 100%; height: auto; border-radius: 6px; background: #fff; display: block; margin: 8px 0; }
+  dialog.rd .pages { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  dialog.rd .pages button.cur { background: var(--hi); border-color: var(--hi); color: #000; }
+  dialog.rd .key span { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 3px solid; vertical-align: -2px; margin: 0 4px 0 10px; }
+  dialog.rd .vals { columns: 4 170px; font-size: 14px; margin: 6px 0 10px; }
+  dialog.rd .vals div { break-inside: avoid; }
+  dialog.rd .vals .g { color: #c2410c; font-weight: 700; }
 
   .lower { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; margin-top: 14px; align-items: start; }
   @media (max-width: 1000px) { .lower { grid-template-columns: 1fr; } }
@@ -113,6 +125,7 @@ them in its slots (Chrome or Edge; MB-1 0.12 or later).</p>
     <select id="factory" aria-label="Factory sounds"><option value="">Factory sound…</option></select>
     <button id="init">Init</button>
     <label class="file">Open .syx<input id="open" type="file" accept=".syx,application/octet-stream"></label>
+    <label class="file" title="A patch sheet: MB-1's own (SVG, PNG), an electric-himalaya.com picture, an Ultimate Patches PDF or page">Read a sheet<input id="readsheet" type="file" accept="image/*,.pdf,.svg,application/pdf,image/svg+xml"></label>
     <button id="savesyx">Save .syx</button>
   </div>
   <div class="grp"><span class="t">Patch sheet</span>
@@ -120,6 +133,17 @@ them in its slots (Chrome or Edge; MB-1 0.12 or later).</p>
   </div>
   <div class="grp"><button id="theme" aria-label="Light or dark sheet">Dark sheet</button></div>
 </div>
+
+<dialog id="rd" class="rd" aria-labelledby="rdh">
+  <h2 id="rdh">Read from the sheet</h2>
+  <div id="rdinfo" class="status"></div>
+  <div id="rdpages" class="pages"></div>
+  <canvas id="rdcv"></canvas>
+  <div class="key status"><span style="border-color:#16a34a"></span>read <span style="border-color:#f06028"></span>told apart by its shape or a guessed order: check it <span style="border-color:#888"></span>not on the sheet: INIT</div>
+  <div id="rdvals" class="vals"></div>
+  <div class="bar"><button id="rdload" class="on">Load into the editor</button><button id="rdbank">All pages into the slots</button><button id="rdno">Cancel</button></div>
+  <p class="note">Controls MB-1 has not (PHONES, MASTER, FINE TUNE, AUDIO IN, ENV SPEED, CLOCK, TEMPO, OCTAVE) are left out; MB-1's effects stay off. Dashed rings on the sheet mark what to check by ear.</p>
+</dialog>
 
 <div id="sheetwrap"><svg id="sheet" class="sheet" viewBox="0 0 1600 1275" role="group" aria-label="Patch sheet"></svg></div>
 
@@ -409,7 +433,7 @@ function setP(p, x, from = "ui") {
   x = Math.max(0, Math.min(meta.max[p], Math.round(x)));
   if (cur.v[p] === x) return;
   cur.v[p] = x;
-  const c = byP[p]; if (c) { c.update(x); aria(c); show(c); }
+  const c = byP[p]; if (c) { c.update(x); aria(c); show(c); c.g.classList.remove("guess"); }
   if (p === P.DSYNC && byP[P.DTIME]) aria(byP[P.DTIME]);
   engineSet(p, x);
   if (from !== "fm") fmParam(p, x);
@@ -456,6 +480,7 @@ function faderAt(c, e) {
 
 /* ------------------------------------------------------------------ patches */
 function loadPatch(name, v, from = "ui") {
+  for (const c of ctl) c.g.classList.remove("guess");
   cur.name = (name + "        ").slice(0, 8);
   for (let i = 0; i < NP; i++) cur.v[i] = Math.min(meta.max[i], v[i] ?? meta.init[i]);
   refresh(); engineAll();
@@ -585,15 +610,77 @@ async function sheetSVG() {
   if (!/xmlns="http:\/\/www.w3.org\/2000\/svg"/.test(txt)) txt = txt.replace("<svg", `<svg xmlns="${SVGNS}"`);
   return txt;
 }
-document.getElementById("svg").addEventListener("click", async () => download(fileName(cur.name) + "_patch_sheet.svg", await sheetSVG(), "image/svg+xml"));
+let SR = null;   /* sheetread.js, loaded when first needed */
+const sheetRead = async () => (SR = SR || await import("./sheetread.js"));
+document.getElementById("svg").addEventListener("click", async () => {
+  const sr = await sheetRead();   /* (the patch rides inside: Read a sheet takes it back exactly) */
+  download(fileName(cur.name) + "_patch_sheet.svg", sr.svgWithPatch(await sheetSVG(), frame01(0, cur.name, cur.v)), "image/svg+xml");
+});
 document.getElementById("png").addEventListener("click", async () => {
   const img = new Image(); img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(await sheetSVG());
   await img.decode();
   const cv = document.createElement("canvas"); cv.width = 3200; cv.height = 2550;
   cv.getContext("2d").drawImage(img, 0, 0, 3200, 2550);
-  cv.toBlob((b) => download(fileName(cur.name) + "_patch_sheet.png", b, "image/png"), "image/png");
+  const sr = await sheetRead();
+  cv.toBlob(async (b) => download(fileName(cur.name) + "_patch_sheet.png", await sr.pngWithPatch(b, frame01(0, cur.name, cur.v)), "image/png"), "image/png");
 });
 document.getElementById("print").addEventListener("click", () => window.print());
+
+/* ------------------------------------------------------------------ reading a patch sheet (sheetread.js) */
+const rd = document.getElementById("rd");
+let rdRes = [], rdAt = 0;
+const fullV = (r) => Array.from({ length: NP }, (_, i) => (r.v[i] != null ? Math.min(r.v[i], meta.max[i]) : meta.init[i]));
+function rdShow(k) {
+  rdAt = k; const r = rdRes[k];
+  document.querySelectorAll("#rdpages button").forEach((b, i) => b.classList.toggle("cur", i === k));
+  document.getElementById("rdinfo").innerHTML = "";
+  const b = document.createElement("b"); b.textContent = `${r.layout}${r.page && rdRes.length > 1 ? ", page " + r.page : ""}: ${r.name}`;
+  document.getElementById("rdinfo").append(b, ` · ${Object.keys(r.v).length} values read`);
+  const cv = document.getElementById("rdcv"), src = r.canvas;
+  const [x0, y0, x1, y1] = r.crop || [0, 0, src.width, src.height];
+  cv.width = x1 - x0; cv.height = y1 - y0;
+  const x = cv.getContext("2d"); x.drawImage(src, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
+  for (const m of r.marks) {
+    x.strokeStyle = m.how === "unset" ? "#888" : m.how === "guess" ? "#f06028" : "#16a34a";
+    x.lineWidth = Math.max(3, cv.width / 300); x.beginPath(); x.arc(m.x - x0, m.y - y0, cv.width / 70, 0, 7); x.stroke();
+  }
+  const vals = document.getElementById("rdvals"); vals.textContent = "";
+  const v = fullV(r);
+  for (const p of Object.keys(r.v).map(Number).sort((a, b) => a - b)) {
+    const d = document.createElement("div"); if (r.how[p] === "guess") d.className = "g";
+    d.textContent = `${meta.name[p]}  ${cstr(W.ed_text(p, v[p], v[P.DSYNC]))}${r.how[p] === "guess" ? "  ?" : ""}`;
+    vals.appendChild(d);
+  }
+}
+function rdLoad(r) {
+  loadPatch(r.name, fullV(r));
+  for (const [p, h] of Object.entries(r.how)) if (h === "guess" && byP[p]) byP[p].g.classList.add("guess");
+  dirty(true);
+}
+document.getElementById("readsheet").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  say("reading the sheet …");
+  let res;
+  try { res = await (await sheetRead()).readSheetFile(f); }
+  catch (err) { return say("could not read that file: " + err.message, true); }
+  if (!res.length) return say("no patch sheet MB-1 knows in that file (MB-1's own, electric-himalaya.com, Ultimate Patches)", true);
+  if (res.length === 1 && res[0].exact) { loadPatch(res[0].name, fullV(res[0])); dirty(true); return say(`${res[0].name.trim()}: read from its MB-1 sheet`); }
+  rdRes = res;
+  const pages = document.getElementById("rdpages"); pages.textContent = "";
+  res.forEach((r, k) => { const b = document.createElement("button"); b.textContent = r.name.trim() || "page " + r.page; b.addEventListener("click", () => rdShow(k)); pages.appendChild(b); });
+  pages.style.display = res.length < 2 ? "none" : "";
+  document.getElementById("rdbank").style.display = res.length < 2 ? "none" : "";
+  document.getElementById("rdbank").textContent = `All ${res.length} into the slots from ${slotName(slot)}`;
+  rdShow(0); rd.showModal(); say("");
+});
+document.getElementById("rdload").addEventListener("click", () => { rdLoad(rdRes[rdAt]); rd.close(); say(`${rdRes[rdAt].name.trim()}: read from the sheet; check the dashed ones by ear`); });
+document.getElementById("rdbank").addEventListener("click", () => {
+  if (rdRes.some((_, k) => bank[slot + k]) && !confirm(`Replace the slots from ${slotName(slot)} on with these ${rdRes.length} patches? (Only in the list here until you write them to the FM-1.)`)) return;
+  rdRes.forEach((r, k) => { if (slot + k < NSLOT) bank[slot + k] = { name: (r.name + "        ").slice(0, 8), v: fullV(r), fm: false }; });
+  view = Math.floor(slot / BANK_N); drawSlots(); rdLoad(rdRes[0]); rd.close();
+  say(`${Math.min(rdRes.length, NSLOT - slot)} patches into the slots from ${slotName(slot)}; Write all to FM-1 to keep them there`);
+});
+document.getElementById("rdno").addEventListener("click", () => rd.close());
 
 /* ------------------------------------------------------------------ the theme: light or dark */
 const themeBtn = document.getElementById("theme");
