@@ -233,6 +233,7 @@ function knob(p, cx, cy, name, o = {}) {
   const r = o.r || (o.big ? 44 : 30);
   const g = el("g", { class: "ctl", transform: `translate(${cx},${cy})`, tabindex: 0, role: "slider" }, sheet);
   el("circle", { class: "ring", r: r + 16 }, g);
+  el("circle", { r: r + 14, fill: "transparent" }, g);   /* (the ticks too take the pointer) */
   const ticks = o.ticks || 11;
   for (let k = 0; k < ticks; k++) {
     const a = -135 + 270 * k / (ticks - 1), [x1, y1] = pol(r + 5, a), [x2, y2] = pol(r + (k === 0 || k === ticks - 1 || (BIP.has(p) && k === (ticks - 1) / 2) ? 15 : 12), a);
@@ -257,6 +258,7 @@ function rotary(p, cx, cy, name, names, o = {}) {
   const r = o.r || 24, n = names.length, step = o.step || Math.min(42, 270 / (n - 1)), a0 = o.a0 != null ? o.a0 : -step * (n - 1) / 2;
   const g = el("g", { class: "ctl", transform: `translate(${cx},${cy})`, tabindex: 0, role: "slider" }, sheet);
   el("circle", { class: "ring", r: r + 14 }, g);
+  el("circle", { r: r + 12, fill: "transparent" }, g);
   names.forEach((s, k) => {
     const a = a0 + step * k, [x1, y1] = pol(r + 4, a), [x2, y2] = pol(r + 10, a), [tx, ty] = pol(r + 16, a);
     el("line", { x1, y1, x2, y2, stroke: C.ink, "stroke-width": 2.6, "stroke-linecap": "round" }, g);
@@ -291,6 +293,7 @@ function sw(p, cx, cy, name, names, o = {}) {
   const n = names.length, gap = o.gap || 22, h = gap * (n - 1) + 24;
   const g = el("g", { class: "ctl sw", transform: `translate(${cx},${cy})`, tabindex: 0, role: "slider" }, sheet);
   el("rect", { class: "ring", x: -18, y: -h / 2 - 6, width: 36 + 70, height: h + 12, rx: 8 }, g);
+  el("rect", { x: -18, y: -h / 2 - 6, width: 36 + 70, height: h + 12, fill: "transparent" }, g);   /* (all of it takes the pointer) */
   el("rect", { x: -12, y: -h / 2, width: 24, height: h, rx: 12, fill: C.cap }, g);
   names.forEach((s, k) => label(g, 18, -h / 2 + 12 + gap * k + 5, s, 14, "start", 600));
   const dot = el("circle", { r: 10, fill: C.ink }, g);
@@ -346,7 +349,7 @@ function drawSheet() {
   y = 355;
   section(20, y, 545, 230, "Oscillator Mixer");
   const ft = y + 32, fh = 140;
-  [[P.SUB, 75, "Sub Osc"], [P.SAW, 180, null, "saw"], [P.SQR, 285, null, "sqr"], [P.TRI, 390, null, "tri"], [P.NOISE, 495, null, "noise"]]
+  [[P.SUB, 75, "Sub Osc"], [P.SAW, 180, "Saw", "saw"], [P.SQR, 285, "Square", "sqr"], [P.TRI, 390, "Triangle", "tri"], [P.NOISE, 495, "Noise", "noise"]]
     .forEach(([p, x, n, ic]) => fader(p, x, ft, fh, n, ic ? icon(ic) : null));
   [127.5, 232.5, 337.5, 442.5].forEach((x) => el("line", { x1: x, y1: y + 14, x2: x, y2: y + 214, stroke: C.ink, "stroke-width": 3 }, sheet));
   section(575, y, 490, 230, "Filter Envelope");
