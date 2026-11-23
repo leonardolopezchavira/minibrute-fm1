@@ -1,6 +1,6 @@
 # MB-1 build settings (fm1-base tools/build.py)
 name = "MB1"
-id_prefix = "FM-1_42"          # package identity: dev FM-1_4200, releases FM-1_42XXYYZZ
+id_prefix = "FM-1_49"          # package identity: dev FM-1_4900, releases FM-1_49XXYYZZ (FM-1_42 is MODELAR's on the hub)
 usb_manufacturer = "minibrute-fm1"
 usb_product = "MB-1 FM-1"
 o2 = ["mbvoice/mbvoice.c", "mbvoice/mbfx.c"]   # the engine and the effects, at -O2

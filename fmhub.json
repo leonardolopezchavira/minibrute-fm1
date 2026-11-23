@@ -1,0 +1,12 @@
+{
+  "what": "An aggressive monophonic virtual analog synth after the Arturia MiniBrute: Ultrasaw, PWM square, Metalizer triangle, sub and noise into a resonant multimode filter with Brute Factor. Two envelopes, LFO, arpeggiator, 64-step sequencer, five effects and 128 patch slots.",
+  "author": "Leonardo Lopez Chavira",
+  "kinds": [
+    "synth"
+  ],
+  "play": "https://leonardolopezchavira.github.io/minibrute-fm1/emu/",
+  "editor": "https://leonardolopezchavira.github.io/minibrute-fm1/edit/",
+  "image": "docs/img/card.png",
+  "color": "#F06028",
+  "sounds": "own: synth patches only (parameter settings, no samples), programmed for MB-1; A01-A23 approximate sounds of Arturia MiniBrute V factory presets, A24-A32 were made with MB-1's RANDOM"
+}

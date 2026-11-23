@@ -214,7 +214,7 @@ reboot
 wait 600
 expect slot 2
 expect p0 10
-# the factory slots back (bank A: A03 is ASTRALLE, its cutoff 46); then 0.14's three again, for the checks below
+# the factory slots back (bank A: A03 is NEBULA, its cutoff 46); then 0.14's three again, for the checks below
 sysex F0 7D 4D 42 03 F7
 wait 30
 expect p0 46
@@ -1005,7 +1005,7 @@ wait 300
 sysex_out
 sysex F0 7D 4D 42 05 00 F7
 wait 50
-expect_sysex F0 7D 4D 42 05 00 41 42 49 44 49 4E 47 41 73 13 00 3A 00 1C 00 00 00 7F 00 29 06 7F 05 27 00 25 00 1F 18 32 00 2B 00 04 40 43 51 44 5C 01 00 00 01 0D 00 01 29 41 00 00 40 40 00 01 01 01 03 02 02 00 44 49 66 3A 01 00 40 40 40 00 00 00 00 40 7F 00 17 7F 7F 00 33 00 40 40 F7
+expect_sysex F0 7D 4D 42 05 00 48 41 4C 43 59 4F 4E 20 73 13 00 3A 00 1C 00 00 00 7F 00 29 06 7F 05 27 00 25 00 1F 18 32 00 2B 00 04 40 43 51 44 5C 01 00 00 01 0D 00 01 29 41 00 00 40 40 00 01 01 01 03 02 02 00 44 49 66 3A 01 00 40 40 40 00 00 00 00 40 7F 00 17 7F 7F 00 33 00 40 40 F7
 sysex F0 7D 4D 42 05 1F F7
 wait 50
 expect_sysex F0 7D 4D 42 05 1F 56 49 42 52 4F 50 41 44 4F 01 0A 50 00 2C 43 00 00 00 66 5A 00 00 40 15 43 13 62 22 1D 47 35 09 3B 04 40 40 40 40 44 01 27 00 00 47 01 01 0B 3C 34 00 40 6B 00 01 00 00 02 02 05 00 58 5A 62 3A 01 00 68 31 29 3C 0E 00 00 11 6D 00 3C 66 70 00 4A 26 13 2B F7
