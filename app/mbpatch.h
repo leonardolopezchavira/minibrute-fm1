@@ -125,25 +125,8 @@ static const uint8_t INIT_V[NP] = {
     [P_XTYPE] = 0, [P_XDRV] = 64, [P_XTONE] = 127, [P_XMIX] = 0, [P_CRATE] = 23, [P_CDEPTH] = 127, [P_CPHASE] = 127,
     [P_CMIX] = 0, [P_KTHR] = 51, [P_KRAT] = 0, [P_KATT] = 64, [P_KREL] = 64,
 };
-/* the factory sounds: changes from INIT (parameter, value; 0xFF ends) */
-static const struct {
-    char name[9];
-    uint8_t d[28];
-} FACTORY[] = {
-    {"INIT", {0xFF}},
-    {"BASS", {P_SUB, 100, P_CUT, 35, P_RES, 40, P_BRUTE, 60, P_FENV, 100, P_FD, 17, P_AD, 27, P_AS, 100, P_AR, 2,
-              P_KBD, 32, 0xFF}},
-    {"ACID", {P_SAW, 0, P_SQR, 127, P_CUT, 30, P_RES, 100, P_FENV, 110, P_FD, 13, P_GLIDE, 27, P_WDEST, 2,
-              P_AR, 1, 0xFF}},
-    {"METALEAD", {P_SAW, 60, P_TRI, 127, P_METAL, 70, P_CUT, 85, P_RES, 50, P_VINT, 40, P_GLIDE, 15, P_KBD, 50,
-                  0xFF}},
-    {"ULTRAPAD", {P_ULTRA, 100, P_USRATE, 25, P_CUT, 62, P_RES, 30, P_FENV, 80, P_FA, 52, P_FD, 60, P_FS, 60,
-                  P_AA, 59, P_AD, 53, P_AS, 110, P_AR, 53, 0xFF}},
-    {"PERC", {P_SAW, 0, P_NOISE, 127, P_MODE, 1, P_CUT, 73, P_RES, 90, P_AD, 10, P_AS, 0, P_AR, 10, P_FENV, 90,
-              P_FD, 10, 0xFF}},
-    {"BRASS", {P_SQR, 60, P_CUT, 40, P_FENV, 110, P_FA, 16, P_FD, 33, P_FS, 60, P_AA, 5, P_AR, 10, 0xFF}},
-    {"WOBBLE", {P_SUB, 90, P_CUT, 35, P_RES, 70, P_LRATE, 51, P_LFILT, 110, P_BRUTE, 50, P_WDEST, 0, 0xFF}},
-};
+/* the factory sounds: bank A's first slots (app/factory, tools/make_factory.py) */
+#include "factory_bank.h"
 #define NFACTORY (sizeof FACTORY / sizeof FACTORY[0])
 
 static void patch_name(patch_t *p, const char *s)
@@ -163,8 +146,8 @@ static void patch_factory(patch_t *p, uint32_t slot)
         return;
     }
     patch_name(p, FACTORY[slot].name);
-    for (i = 0; i + 1u < sizeof FACTORY[0].d && FACTORY[slot].d[i] != 0xFFu; i += 2u)
-        p->v[FACTORY[slot].d[i]] = FACTORY[slot].d[i + 1u];
+    for (i = 0; i < NP; i++)
+        p->v[i] = FACTORY[slot].v[i];
 }
 
 /* ---------------------------------------------------------------- mapping --- */

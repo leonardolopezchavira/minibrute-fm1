@@ -168,6 +168,7 @@ them in its slots (Chrome or Edge; MB-1 0.12 or later).</p>
       <label class="file">Open bank<input id="openbank" type="file" accept=".syx,application/octet-stream"></label>
       <button id="savebank">Save bank .syx</button>
       <button id="wrall" disabled>Write all to FM-1</button>
+      <button id="factorybank" title="Bank A's factory patches, in the list here and, connected, on the FM-1">Factory bank A</button>
     </div>
     <p class="note">128 slots in four banks, A01 to D32. Save to slot puts this patch in the slot picked here, and, connected, stores it on the FM-1.</p>
   </div>
@@ -946,6 +947,20 @@ function fmUi() {
 document.getElementById("conn").addEventListener("click", connect);
 document.getElementById("rdall").addEventListener("click", readAll);
 liveBtn.addEventListener("click", () => { live = !live; liveBtn.classList.toggle("on", live); liveBtn.setAttribute("aria-pressed", live); if (live) fmPatch(); });
+document.getElementById("factorybank").addEventListener("click", async () => {
+  if (!confirm(fm ? "Put bank A's factory patches back on the FM-1 (A01..A32; banks B..D stay as they are)?" : "Put bank A's factory patches in the list here (A01..A32)?")) return;
+  const ptr = W.ed_values();
+  for (let s = 0; s < BANK_N; s++) {
+    const name = cstr(W.ed_factory(s, ptr));
+    bank[s] = { name: (name + "        ").slice(0, 8), v: Array.from(new Uint8Array(W.memory.buffer, ptr, NP)), fm: false };
+  }
+  if (fm) {
+    const st = await fmSend([...HDR, 3, 0xF7], 3, 4000);
+    if (st === 0) bank.forEach((b, s) => { if (b && s < BANK_N) b.fm = true; });
+    say(st === 0 ? "bank A's factory patches are back on the FM-1" : "the FM-1 did not take them", st !== 0);
+  }
+  view = 0; drawSlots();
+});
 document.getElementById("wrall").addEventListener("click", async () => {
   if (!fm || !confirm("Write every slot in the list to the FM-1 and store them? Slots that are empty here stay as they are.")) return;
   let ok = 0, n = 0;

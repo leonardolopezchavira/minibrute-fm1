@@ -165,8 +165,12 @@ seconds after a change, while stopped; SAVE also stores them) and kept over powe
 
 ## The patches
 
-128 slots in four banks of 32, A01..D32: turn PRESET to pick one. Slots A01..A08 start with factory sounds: INIT, BASS, ACID, METALEAD, ULTRAPAD, PERC, BRASS, WOBBLE; the rest
-start as INIT. SAVE, PRESET, SAVE stores the patch in any slot (SAVE twice: its own). (Before 0.12 there were 32 slots: they are bank A now, as they were.) The
+128 slots in four banks of 32, A01..D32: turn PRESET to pick one. Bank A holds the factory patches: A01..A23 are
+MiniBrute V's factory presets converted to MB-1 (an approximation, effects and arpeggiator included; the names cut to
+eight letters), A24..A32 more sounds; banks B..D start as INIT. A new install and the emulator start with them; on an
+FM-1 that already has patches, they stay as they are, and the patch editor's **Factory bank A** puts bank A's back
+(banks B..D are left alone). SAVE, PRESET, SAVE stores the patch in any slot (SAVE twice: its own). (Before 0.12 there
+were 32 slots: they are bank A now, as they were.) The
 patch editor (below) reads, edits and stores all of them, and keeps banks as .syx files.
 
 ## The knobs' range
