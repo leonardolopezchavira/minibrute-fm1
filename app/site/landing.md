@@ -10,7 +10,7 @@ This is version {{VERSION}}. You install it at your own risk, and the installer 
 
 - [Install](install/) it from Chrome or Edge, with the FM-1 connected by USB.
 - Edit patches on a patch sheet in the [patch editor](edit/).
-- Read the [manual](manual/).
+- Read the [manual](manual/), or keep the [cheat sheet](cheat/) beside the FM-1.
 - [Try it in the browser](emu/).
 - [Download {{PKG}}](firmware/{{PKG}}).
 - The [source](https://github.com/leonardolopezchavira/minibrute-fm1) (MIT), built on fm1-base (MPL-2.0) and

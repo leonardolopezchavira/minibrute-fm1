@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 BASE = "/minibrute-fm1/"
-NAV = [("", "Home"), ("install/", "Install"), ("edit/", "Patch editor"), ("manual/", "Manual"), ("emu/", "Emulator")]
+NAV = [("", "Home"), ("install/", "Install"), ("edit/", "Patch editor"), ("manual/", "Manual"), ("emu/", "Emulator"), ("cheat/", "Cheat sheet")]
 ORANGE = "#f06028"
 
 # the theme before the first paint: the one picked before, else the system's

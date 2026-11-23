@@ -3,7 +3,8 @@
 MB-1 turns the FM-1 into an aggressive monophonic virtual analog synthesizer, after the Arturia MiniBrute and
 measured against its MiniBrute V plugin. One voice, last-note priority: hold a key, play another, let it go, and the
 first comes back (with glide, if GLIDE is up). It keeps 128 patches, has an arpeggiator, a 64-step sequencer and five
-effects, and comes with a patch editor in the browser.
+effects, and comes with a patch editor in the browser. A two-page [cheat sheet](../cheat/) (PDF) sums this manual
+up, to keep beside the FM-1.
 
 ![Playing](img/playing.png)
 
@@ -165,9 +166,10 @@ seconds after a change, while stopped; SAVE also stores them) and kept over powe
 
 ## The patches
 
-128 slots in four banks of 32, A01..D32: turn PRESET to pick one. Bank A holds the factory patches: A01..A23 are
-MiniBrute V's factory presets converted to MB-1 (an approximation, effects and arpeggiator included; the names cut to
-eight letters), A24..A32 more sounds; banks B..D start as INIT. A new install and the emulator start with them; on an
+128 slots in four banks of 32, A01..D32: turn PRESET to pick one. Bank A holds the 32 factory patches: A01..A23 (HALCYON,
+TRENCH, NEBULA ... STARSHIP) were programmed on MB-1 after sounds of MiniBrute V's factory presets (approximations, with
+names of their own, effects and arpeggiator included), A24..A32 (SKWEESH ... VIBROPAD) were made with RANDOM; banks
+B..D start as INIT. A new install and the emulator start with them; on an
 FM-1 that already has patches, they stay as they are, and the patch editor's **Factory bank A** puts bank A's back
 (banks B..D are left alone). SAVE, PRESET, SAVE stores the patch in any slot (SAVE twice: its own). (Before 0.12 there
 were 32 slots: they are bank A now, as they were.) The

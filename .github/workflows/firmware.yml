@@ -57,6 +57,7 @@ jobs:
           python3 tools/make_home.py app/build/site "$V"
           sh tools/build_editor.sh app/build/site/edit
           python3 tools/site_theme.py app/build/site
+          python3 tools/make_cheat.py app/build/site/cheat "$V"   # (after the theme: a print page of its own; Chrome prints the PDF)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: app/build/site

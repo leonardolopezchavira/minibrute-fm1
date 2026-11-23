@@ -4,12 +4,15 @@ An unofficial, aggressive monophonic virtual analog synthesizer firmware for the
 MiniBrute: written from scratch and measured against Arturia's MiniBrute V plugin. Built on [fm1-base](https://github.com/charlesvestal/fm1-base), laid
 out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
 
-- **Install, patch editor, manual, emulator:** https://leonardolopezchavira.github.io/minibrute-fm1/
+- **Install, patch editor, manual, emulator, cheat sheet:** https://leonardolopezchavira.github.io/minibrute-fm1/
+- **Also on [The Firmware Hub](https://thefirmwarehub.com/)**, as MB-1 (identity `FM-1_49XXYYZZ`: 0.15.0 is
+  `FM-1_49001500`); its card's text is [`fmhub.json`](fmhub.json).
 - **The voice:** sawtooth with Ultrasaw, square with PWM, triangle with Metalizer, sub (square or sine, -1 or -2
   octaves) and noise; a resonant 12 dB LP / BP / HP / notch filter with Brute Factor, key tracking and self-oscillation;
   filter and amp ADSRs; an LFO (six waves) to pitch, filter, PWM/Metalizer and amp; vibrato; the mod wheel to LFO
   amount, vibrato or cutoff; aftertouch; glide; vintage drift.
-- **Patches:** 128 slots in four banks of 32 (A01..D32), every parameter saved with the patch and on its own MIDI CC.
+- **Patches:** 128 slots in four banks of 32 (A01..D32), every parameter saved with the patch and on its own MIDI CC;
+  a factory bank of 32 in bank A (`app/factory/MB-1_bank.syx`); RANDOM (HOME three times) for a new one.
 - **Performance:** an arpeggiator after the Minibrute's (saved with each patch), and a 64-step sequencer after the
   KeyStep's with 8 patterns (step entry and recording in time; notes, velocity, rests, ties), on one clock: tempo,
   tap tempo or MIDI clock.
@@ -26,11 +29,13 @@ out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
 | --- | --- |
 | `app/mbvoice/` | The engine: portable C99, float only (`MB_FASTMATH` uses fm1-base's fastmath.h, no libm) |
 | `app/app.c` | The FM-1 app: pages, patches, MIDI, the screen |
-| `app/mbpatch.h` | A patch's parameters, INIT and factory sounds, and their mapping to the engine (shared with the editor) |
+| `app/mbpatch.h` | A patch's parameters and INIT, and their mapping to the engine (shared with the editor) |
+| `app/factory/` | The factory bank as the editor saves it (.syx); `tools/make_factory.py` makes `app/factory_bank.h` from it |
 | `app/editor/` | The patch editor: the page, and its engine's wrapper for WebAssembly (`tools/build_editor.sh`) |
 | `app/site/` | The front page, its pictures and the font (Barlow Condensed, SIL OFL 1.1); `tools/site_theme.py` styles every page |
 | `app/splash/` | The start-up screen (SVG and its 240 x 240 PNG); `tools/make_splash.py` makes `app/splash_img.h` from it |
-| `tools/` | The site's and editor's build steps (`build_editor.sh`, `make_home.py`, `site_theme.py`) and `make_splash.py` |
+| `tools/` | The site's and editor's build steps (`build_editor.sh`, `make_home.py`, `site_theme.py`, `make_cheat.py`: the cheat sheet, from the manual's tables), `make_splash.py` and `make_factory.py` |
+| `fmhub.json`, `docs/img/card.png` | The Firmware Hub's card: its text and picture |
 | `app/tests/basic.txt` | Host simulator checks |
 | `fm1/base/` | fm1-base, vendored |
 
@@ -43,7 +48,12 @@ out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
 
 Every push to `main` builds the firmware on GitHub Actions (zvenson/fm1-build) and publishes the site: fm1-base's
 installer, manual and emulator, then the front page (`tools/make_home.py`), the patch editor
-(`tools/build_editor.sh`) and the look over all of them (`tools/site_theme.py`).
+(`tools/build_editor.sh`), the look over all of them (`tools/site_theme.py`) and the cheat sheet
+(`tools/make_cheat.py`, its PDF printed by Chrome).
+
+**A release:** set `app/VERSION`, push, then publish a GitHub release with a new tag `vX.Y.Z` on `main` (on the
+website, or `git tag vX.Y.Z && git push origin vX.Y.Z`). The tag's run builds and signs the `.fwsc` and attaches it to
+the release; The Firmware Hub lists it within three hours. Attach nothing by hand: the hub checks the signature.
 
 ## About the measurements
 

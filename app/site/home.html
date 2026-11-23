@@ -62,6 +62,7 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
   .sec p { margin: 0 0 10px; }
   .sec ul { margin: 0; padding-left: 1.1em; }
   .sec li::marker { color: var(--hi); }
+  .demo video { width: 100%; height: auto; display: block; border-radius: 10px; background: #000; }
   .sheetpic img { width: 100%; height: auto; display: block; border-radius: 10px; }
   [data-theme="light"] .sheetpic .dark, [data-theme="dark"] .sheetpic .light { display: none; }
   footer { margin-top: 60px; padding: 26px 0 50px; border-top: 3px solid var(--ink); color: var(--mute); font-size: 14px; }
@@ -88,12 +89,13 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
           <a class="btn" href="edit/">Patch editor</a>
           <a class="btn" href="emu/">Try it in the browser</a>
           <a class="btn" href="manual/">Manual</a>
+          <a class="btn" href="cheat/">Cheat sheet</a>
         </div>
-        <div class="ver">Version {{VERSION}} · <a href="firmware/{{PKG}}">download {{PKG}}</a> · <a href="https://github.com/leonardolopezchavira/minibrute-fm1">source (MIT)</a></div>
+        <div class="ver">Version {{VERSION}} · <a href="firmware/{{PKG}}">download {{PKG}}</a> · <a href="https://github.com/leonardolopezchavira/minibrute-fm1">source (MIT)</a> · also on <a href="https://thefirmwarehub.com/">The Firmware Hub</a></div>
       </div>
       <div class="sec screen">
         <span class="tab">On the FM-1</span>
-        <div><img src="manual/img/playing.png" width="240" height="240" alt="The FM-1's screen running MB-1: patch A01 INIT, the FILTER page, its cutoff, resonance, Brute Factor and envelope amount drawn as knobs with their values in orange">
+        <div><img src="manual/img/playing.png" width="240" height="240" alt="The FM-1's screen running MB-1: patch A01 HALCYON, the FILTER page, its cutoff, resonance, Brute Factor and level drawn as knobs with their values in orange">
         <div class="cap">Four controls a page, drawn as on the patch sheet</div></div>
       </div>
     </div>
@@ -106,6 +108,26 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
     <div class="sec stat" role="listitem"><span class="tab">Play</span><div class="n">64</div><div class="k">Sequencer steps</div><p>An arpeggiator and an 8-pattern step sequencer.</p></div>
     <div class="sec stat" role="listitem"><span class="tab">Effects</span><div class="n">5</div><div class="k">Effects</div><p>Distortion, Juno-style chorus, delay, reverb and a compressor.</p></div>
   </div>
+
+  <section class="part">
+    <div class="panel two">
+      <div class="sec demo">
+        <span class="tab">Hear it</span>
+        <video controls preload="none" poster="img/demo-poster.jpg" width="1280" height="720">
+          <source src="img/MB-1_demo.mp4" type="video/mp4">
+        </video>
+      </div>
+      <div class="sec">
+        <span class="tab">The factory bank</span>
+        <h2>32 patches to start from, and RANDOM for the next one.</h2>
+        <p>Bank A comes with 32 patches: basses, leads, pads, plucks and an arpeggio, each with its effects and
+        arpeggiator settings. Press HOME three times for a new random patch, then SAVE it to any of the 128 slots under
+        a name of your own.</p>
+        <p>The video is MB-1 itself, recorded from its simulator: the same code, sound and screen as on the FM-1.</p>
+        <div class="cta"><a class="btn pri" href="emu/">Play it in the browser</a> <a class="btn" href="cheat/">Cheat sheet</a></div>
+      </div>
+    </div>
+  </section>
 
   <section class="part">
     <div class="panel two">
@@ -140,7 +162,7 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
         reverb on the second. Its screen shows the load, so you can see the headroom.</p></div>
       <div class="sec"><span class="tab">Yours</span><h3>Open, and reversible</h3>
         <p>MIT-licensed source on GitHub. The installer checks the package, writes it from Chrome or Edge, and can put
-        M-VAVE's own firmware back.</p></div>
+        M-VAVE's own firmware back. Also listed on The Firmware Hub, where new releases appear by themselves.</p></div>
     </div>
   </section>
 

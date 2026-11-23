@@ -6,6 +6,7 @@
   ],
   "play": "https://leonardolopezchavira.github.io/minibrute-fm1/emu/",
   "editor": "https://leonardolopezchavira.github.io/minibrute-fm1/edit/",
+  "cheat": "https://leonardolopezchavira.github.io/minibrute-fm1/cheat/MB-1_cheatsheet.pdf",
   "image": "docs/img/card.png",
   "color": "#F06028",
   "sounds": "own: synth patches only (parameter settings, no samples), programmed for MB-1; A01-A23 approximate sounds of Arturia MiniBrute V factory presets, A24-A32 were made with MB-1's RANDOM"
