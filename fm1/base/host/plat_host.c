@@ -319,6 +319,7 @@ uint32_t plat_smk_button_hits(void)
     return hit;
 }
 void plat_smk_leds(uint32_t lit) { smk_led = lit; }
+void plat_smk_volume(int pct) { master = (uint32_t)((pct < 0 ? 0 : pct > 100 ? 100 : pct) * 4096 / 100); }
 static int smk_k1_raw;                  /* (MB-1) K1 the app's knob: plat_smk_k1 (script: k1 N) */
 static int32_t smk_k1_acc;
 void plat_smk_k1_raw(int on) { smk_k1_raw = on != 0; smk_k1_acc = 0; }

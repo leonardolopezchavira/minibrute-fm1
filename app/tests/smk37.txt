@@ -4,7 +4,9 @@
 # (sustain), the outer keys, and the buttons and knobs by their FM-1 meaning
 wait 600
 shot smk_boot.png
+# power-on: A01, the volume at half
 expect slot 0
+expect vol 50
 expect p0 115
 # the middle keys with their velocity: A01 HALCYON's arpeggiator off first (ARP: ON -> HOLD -> OFF)
 tap ARP
@@ -107,12 +109,74 @@ smkbtn FADER
 wait 30
 expect fbank 0
 shot smk_panel.png
+# the volume: K1 on the pages (KNOB BANK); the foot shows it
+# the sequencer: SEQ its page, SEQ again the piano roll; REC stopped: step entry, the pads pick the step
+tap SEQ
+wait 30
+expect roll 0
+tap SEQ
+wait 30
+expect roll 1
+tap REC
+wait 30
+expect seqrec 1
+key 7 down 100
+wait 30
+key 7 up
+wait 30
+key 9 down 100
+wait 30
+key 9 up
+wait 30
+key 11 down 100
+wait 30
+key 11 up
+wait 30
+key 12 down 100
+wait 30
+key 12 up
+wait 30
+expect seqedit 4
+pad 7
+wait 30
+expect rollpick 7
+expect seqedit 7
+key 14 down 100
+wait 30
+key 14 up
+wait 30
+expect seqlen 8
+expect seqedit 8
+pad 1
+wait 30
+key 16 down 100
+wait 30
+key 16 up
+wait 30
+expect seqlen 8
+tap REC
+wait 30
+expect seqrec 0
+smkleds
+shot smk_roll.png
+tap PLAY
+wait 400
+expect seqrun 1
+smkleds
+shot smk_roll_play.png
+tap PLAY
+wait 30
+expect seqrun 0
+tap HOME
+wait 30
+expect roll 0
 # KNOB BANK: the pages, as on the FM-1
 smkbtn KNOB
 wait 30
 expect panel 0
-tap HOME
-wait 30
+k1 -4
+wait 60
+expect vol <45
 expect page 0
 turn K1 -5
 wait 30

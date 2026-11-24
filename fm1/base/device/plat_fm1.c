@@ -119,6 +119,7 @@ void plat_leds(uint32_t buttons, uint32_t keys)
     plat_lights(buttons, keys, 0, 0, 0);
 }
 static uint32_t smk_btn_seen;
+void plat_smk_volume(int pct) { smk_master = (pct < 0 ? 0 : pct > 100 ? 100 : pct) * 1023 / 100; }
 void plat_smk_k1_raw(int on) { smk_k1_raw = (uint8_t)(on != 0); smk_k1_acc = 0; }
 int32_t plat_smk_k1(void)
 {

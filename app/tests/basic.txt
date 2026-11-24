@@ -135,6 +135,10 @@ expect edited 0
 expect dirty 0
 reboot
 wait 600
+# (power-on: A01, as stored)
+expect slot 0
+turn PRESET 1
+wait 30
 expect slot 1
 expect p1 45
 # SAVE elsewhere: SAVE, PRESET to B02 (slot 33), SAVE: stored there and played from there; A02 kept
@@ -152,6 +156,9 @@ expect edited 0
 expect p1 50
 reboot
 wait 600
+expect slot 0
+turn PRESET 33 20
+wait 30
 expect slot 33
 expect p1 50
 turn PRESET -32
@@ -212,6 +219,9 @@ wait 30
 expect_sysex F0 7D 4D 42 7F 02 00 F7
 reboot
 wait 600
+expect slot 0
+turn PRESET 2
+wait 30
 expect slot 2
 expect p0 10
 # the factory slots back (bank A: A03 is NEBULA, its cutoff 46); then 0.14's three again, for the checks below
@@ -696,6 +706,11 @@ wait 2500
 expect seqdirty 0
 reboot
 wait 100
+# (power-on plays A01: back to A03 and the sound it played before, for the checks below)
+turn PRESET 2
+wait 30
+sysex F0 7D 4D 42 07 4F 4C 44 53 54 41 54 45 09 40 40 40 00 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 40 01 40 40 40 40 40 02 40 01 02 00 01 01 40 40 40 40 40 40 00 01 00 00 00 00 01 00 4D 33 5F 00 00 00 40 40 40 00 00 00 00 40 7F 00 17 7F 7F 00 33 00 40 40 F7
+wait 50
 turn K1 -1
 wait 30
 expect sn2 64

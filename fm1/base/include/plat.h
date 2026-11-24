@@ -106,6 +106,7 @@ enum { SB_KNOB_BANK, SB_FADER_BANK, SB_LEFT, SB_RIGHT, NSB };   /* the four butt
 uint32_t plat_smk_buttons(void);       /* held: bit SB_* */
 uint32_t plat_smk_button_hits(void);   /* pressed since the last call: bit SB_* */
 void plat_smk_leds(uint32_t lit);      /* their LEDs, bit SB_* (kept until the next call) */
+void plat_smk_volume(int pct);         /* (MB-1) MASTER (K1's virtual pot) to pct %, 0..100 */
 void plat_smk_k1_raw(int on);          /* (MB-1) 1: knob K1 is the app's (plat_smk_k1), MASTER stays where it is; 0: MASTER */
 int32_t plat_smk_k1(void);             /* (MB-1) K1's detents since the last call while raw, + = clockwise */
 uint64_t plat_keybed(void);            /* keybed keys held: bit k = key k (0 = C3) */

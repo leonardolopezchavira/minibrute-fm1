@@ -166,7 +166,7 @@ seconds after a change, while stopped; SAVE also stores them) and kept over powe
 
 ## The patches
 
-128 slots in four banks of 32, A01..D32: turn PRESET to pick one. Bank A holds the 32 factory patches: A01..A23 (HALCYON,
+128 slots in four banks of 32, A01..D32: turn PRESET to pick one. MB-1 starts on A01 at power-on, as stored. Bank A holds the 32 factory patches: A01..A23 (HALCYON,
 TRENCH, NEBULA ... STARSHIP) were programmed on MB-1 after sounds of MiniBrute V's factory presets (approximations, with
 names of their own, effects and arpeggiator included), A24..A32 (SKWEESH ... VIBROPAD) were made with RANDOM; banks
 B..D start as INIT. A new install and the emulator start with them; on an

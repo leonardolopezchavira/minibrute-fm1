@@ -52,8 +52,12 @@ static const page_t PAGE[] = {
     {"COMP", B_FX, {P_KTHR, P_KRAT, P_KATT, P_KREL}},
     {"ARP", B_ARP, {P_AMODE, P_AOCT, P_ASTEP, P_ASWING}},    {"ARP 2", B_ARP, {P_ARP, G_TEMPO, G_HORD, P_NONE}},
     {"SEQ", B_SEQ, {G_SPAT, G_SLEN, G_SSTEP, G_SSWING}},
+#if APP_SMK
+    {"PIANO ROLL", B_SEQ, {G_SPAT, G_SLEN, G_SSTEP, G_SSWING}},   /* (SEQ again: the pattern drawn; the pads its steps) */
+#endif
 };
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
+#define PG_ROLL (APP_SMK ? NPAGE - 1u : NPAGE)   /* the SMK-37's piano roll (none on the FM-1) */
 
 /* ---------------------------------------------------------------- patches --- */
 #define NBANK 4u                         /* A..D */
@@ -839,6 +843,9 @@ void app_init(void)
     for (j = 0; j < NG; j++)
         if (set.g[j] > pmax(NP + j))
             set.g[j] = G_DEF[j];
+    set.slot = 0;                            /* power-on: A01, as stored (an unsaved edit is not kept) */
+    set.cur = SLOT(0);
+    set.edited = 0;
     arp.state = arp_posted = set.cur.v[P_ARP];   /* (as the patch has it) */
     if (plat_store_load(OBJ_SEQ, &sq, sizeof sq) != (int)sizeof sq || sq.magic != SEQ_MAGIC) {
         sq.magic = SEQ_MAGIC;                /* empty patterns of 16 steps */
@@ -1280,6 +1287,7 @@ static uint32_t pg_btn = 0xFFu, pg_down_ms;   /* a page button held: back to its
  * FX a rest, FX with a key held a tie; playing: in time). A pattern recorded step by step is as long as its steps. */
 static uint32_t seq_edit;                    /* step entry: the next step */
 static uint8_t seq_entered;                  /* steps entered since REC */
+static uint8_t seq_picked;                   /* the SMK-37's pads picked the step: the pattern keeps its length */
 static int32_t seq_key_note = -1;            /* step entry: the last key's note (FX with it held: a tie) */
 static void seq_say_step(const char *what, uint32_t i)
 {
@@ -1297,7 +1305,12 @@ static void seq_step_write(uint32_t note, uint32_t vel, uint32_t flag)   /* step
     pt->flag[e] = (uint8_t)flag;
     if (seq_entered < NSTEP)
         seq_entered++;
-    pt->len = seq_entered;
+    if (seq_picked) {                        /* (a step picked on the pads: the pattern at least that long) */
+        if (pt->len < e + 1u)
+            pt->len = (uint8_t)(e + 1u);
+    } else {
+        pt->len = seq_entered;
+    }
     seq_edit = (e + 1u) % NSTEP;
     sq_dirty = 1;
     sq_changed_ms = plat_ms();
@@ -1318,6 +1331,7 @@ static void rec_button(void)
         if (!seq_running) {                  /* step entry from the first step */
             seq_edit = 0;
             seq_entered = 0;
+            seq_picked = 0;
             seq_key_note = -1;
             app_say("STEP REC", "STEP 1");
         } else {
@@ -1476,6 +1490,86 @@ static void pf_faders(void)
     }
 }
 
+/* The sequencer on the pads: while it plays, and on the piano roll, the 16 pads are 16 steps (the top row 1..8, the
+ * bottom 9..16 of the 16 shown): the step playing bright orange, a note white, a tie a dim orange, a rest dark, past
+ * the pattern's end off; on the piano roll the step picked is lit too. On the piano roll the pads pick the step (REC
+ * stopped: the next key, FX or FX with a key is written there), SEQ held with < or > shows the 16 before or after.
+ * Elsewhere the pads are the white keys, as before. */
+static uint32_t roll_win;                    /* the piano roll's 16 steps: roll_win * 16 .. + 15 (stopped) */
+static uint32_t roll_pick = 0xFFu;           /* the step the pads picked (0xFF: none) */
+static uint32_t roll_window(void)
+{
+    uint32_t L = seq_len(seq_pat()), nwin = (L + 15u) / 16u;
+    if (seq_running)
+        return seq_cur_now / 16u;
+    if (seq_rec)                             /* (step entry: where the next step goes) */
+        return (seq_edit % NSTEP) / 16u;
+    return roll_win < (nwin > 4u ? 4u : nwin) ? roll_win : 0u;
+}
+
+static void pf_pads(void)
+{
+    static uint32_t said = 0xFFFFFFFFu;
+    int roll = set.page == PG_ROLL, show = roll || seq_running;
+    uint32_t hits = plat_pad_hits(), win, p, hash = 0;
+    plat_pads_raw(roll);                     /* (the piano roll: the pads play no notes) */
+    if (!show) {
+        if (said != 0u) {
+            plat_pad_rgb(-1, 0, 0, 0);       /* (the pads back to the white keys' lights) */
+            said = 0;
+        }
+        return;
+    }
+    win = roll_window();
+    if (roll && hits) {                      /* a pad: its step picked */
+        for (p = 0; p < 16u && !(hits & (1u << p)); p++)
+            ;
+        roll_pick = win * 16u + p;
+        if (seq_rec && !seq_running) {
+            seq_edit = roll_pick;
+            seq_picked = 1;
+        }
+        {
+            char t[12];
+            int_text((int32_t)roll_pick + 1, t);
+            app_say("STEP", t);
+        }
+        ui.redraw = 1;
+    }
+    {
+        const seqpat_t *pt = seq_pat();
+        uint32_t L = seq_len(pt), cur = seq_running ? seq_cur_now : 0xFFu,
+                 pick = !roll ? 0xFFu : seq_rec && !seq_running ? seq_edit % NSTEP : roll_pick;
+        uint8_t c[16][3];
+        for (p = 0; p < 16u; p++) {
+            uint32_t st = win * 16u + p;
+            uint8_t r = 0, g = 0, b = 0;
+            if (st >= L)
+                ;                            /* past the end: off */
+            else if (st == cur)
+                r = 255, g = 80, b = 10;
+            else if (st == pick)
+                r = 160, g = 160, b = 160;
+            else if (pt->flag[st] & SF_TIE)
+                r = 60, g = 20, b = 4;
+            else if (pt->vel[st])
+                r = 40, g = 40, b = 40;
+            else
+                r = 4, g = 4, b = 4;
+            c[p][0] = r, c[p][1] = g, c[p][2] = b;
+            hash = hash * 31u + (uint32_t)r * 7u + g * 3u + b + 1u;
+        }
+        if (hash != said) {
+            for (p = 0; p < 16u; p++)
+                plat_pad_rgb((int)p, c[p][0], c[p][1], c[p][2]);
+            said = hash;
+        }
+    }
+}
+
+/* the volume (MASTER: K1 on the pages), shown in the foot and, as it changes, at the top; 50 % at power-on */
+static uint32_t vol_pct(void) { return (plat_master() * 100u + 2048u) / 4096u; }
+
 static void smk_note(uint32_t note, uint32_t vel)
 {
     post(vel ? Q_ON : Q_OFF, note, vel);
@@ -1492,13 +1586,32 @@ static void smk_input(void)
         pf_set(!pf.on);
     if (hits & (1u << SB_FADER_BANK))
         pf_fader_bank(pf.bank + 1u);
-    if (hits & ((1u << SB_LEFT) | (1u << SB_RIGHT))) {   /* < >: the patch before, the next */
+    if ((hits & ((1u << SB_LEFT) | (1u << SB_RIGHT))) && set.page == PG_ROLL && (plat_buttons() & (1u << B_SEQ))) {
+        uint32_t L = seq_len(seq_pat()), nwin = (L + 15u) / 16u;   /* SEQ held, on the piano roll: its 16 steps */
+        roll_win = (roll_window() + nwin + ((hits & (1u << SB_RIGHT)) ? 1u : nwin - 1u)) % nwin;
+        ui.redraw = 1;
+    } else if (hits & ((1u << SB_LEFT) | (1u << SB_RIGHT))) {   /* < >: the patch before, the next */
         char t[16];
         slot_load((set.slot + NSLOT + ((hits & (1u << SB_RIGHT)) ? 1u : NSLOT - 1u)) % NSLOT);
         name_text(&set.cur, t);
         app_say("PATCH", t);
     }
     pf_faders();
+    pf_pads();
+    {
+        static uint32_t vol_was = 0xFFu;
+        uint32_t v = vol_pct();
+        if (v != vol_was) {
+            if (vol_was != 0xFFu) {
+                char t[8];
+                int_text((int32_t)v, t);
+                text_cat(t, "%");
+                app_say("VOLUME", t);
+            }
+            vol_was = v;
+            ui.redraw = 1;
+        }
+    }
     plat_smk_leds((pf.on ? 1u << SB_KNOB_BANK : 0u) | (pf.bank ? 1u << SB_FADER_BANK : 0u));
     if (plat_wheels(&bend, &mod)) {
         uint32_t b14 = (uint32_t)(bend + 8192);
@@ -1914,7 +2027,87 @@ static void draw(void)
         goto foot;
     }
 #if APP_SMK
-    if (pf.on) {                             /* the SMK-37's panel: the eight knobs, the four faders (the foot
+    if (set.page == PG_ROLL) {               /* the piano roll: 16 steps of the pattern, the pitch upwards */
+        const seqpat_t *pt = seq_pat();
+        uint32_t L = seq_len(pt), win = roll_window(), lo = 127, hi = 0, st, nrow, rh;
+        uint32_t cur = seq_running ? seq_cur_now : 0xFFu, pick = seq_rec && !seq_running ? seq_edit % NSTEP : roll_pick;
+        int32_t gy = 14, gh = 120, gx = 24, cw = 13, pitch;
+        char o[8];
+        cv_text(8, 0, &FONT_XS, "PIANO ROLL", C_ACCENT);
+        t[0] = 0;
+        text_cat(t, "PAT ");
+        int_text((int32_t)set.g[G_SPAT - NP] % (int32_t)NPAT + 1, o);
+        text_cat(t, o);
+        text_cat(t, "  ");
+        int_text((int32_t)win * 16 + 1, o);
+        text_cat(t, o);
+        text_cat(t, "-");
+        int_text((int32_t)(win * 16u + 16u < L ? win * 16u + 16u : L), o);
+        text_cat(t, o);
+        text_cat(t, "/");
+        int_text((int32_t)L, o);
+        text_cat(t, o);
+        cv_text(232 - text_w(&FONT_XS, t), 0, &FONT_XS, t, C_GRAY);
+        for (st = 0; st < L; st++)           /* the range: the pattern's notes, an octave at least */
+            if (pt->vel[st] && !(pt->flag[st] & SF_TIE)) {
+                lo = pt->note[st] < lo ? pt->note[st] : lo;
+                hi = pt->note[st] > hi ? pt->note[st] : hi;
+            }
+        if (lo > hi)
+            lo = 60, hi = 60;
+        while (hi - lo < 12u) {
+            if (hi < 127u)
+                hi++;
+            if (hi - lo < 12u && lo > 0u)
+                lo--;
+        }
+        nrow = hi - lo + 1u;
+        rh = (uint32_t)gh / nrow;
+        if (rh < 2u)
+            rh = 2u;
+        gy += (gh - (int32_t)(rh * nrow)) / 2;
+        for (pitch = (int32_t)lo; pitch <= (int32_t)hi; pitch++)   /* the C's: a line and a name */
+            if (pitch % 12 == 0) {
+                int32_t y = gy + (int32_t)((hi - (uint32_t)pitch) * rh);
+                cv_rect(gx, y + (int32_t)rh - 1, cw * 16, 1, C_LINE);
+                o[0] = 'C';
+                int_text(pitch / 12 - 1, o + 1);
+                cv_text(2, y + (int32_t)rh - 10, &FONT_XS, o, C_DIM);
+            }
+        pitch = -1;                          /* (a tie at the window's start: the note before it) */
+        for (st = 0; st < win * 16u && st < L; st++)
+            if (pt->vel[st] && !(pt->flag[st] & SF_TIE))
+                pitch = pt->note[st];
+            else if (!(pt->flag[st] & SF_TIE))
+                pitch = -1;
+        for (i = 0; i < 16u; i++) {
+            int32_t x = gx + (int32_t)i * cw;
+            st = win * 16u + i;
+            if (st >= L)                     /* past the pattern's end: nothing */
+                continue;
+            if (st == cur)
+                cv_rect(x, gy, cw - 1, (int32_t)(rh * nrow), C_LINE);
+            if (st == pick) {                /* the step picked: a frame */
+                cv_rect(x, gy - 2, cw - 1, 2, C_WHITE);
+                cv_rect(x, gy + (int32_t)(rh * nrow), cw - 1, 2, C_WHITE);
+            }
+            if (i % 4u == 0u)
+                cv_rect(x, gy, 1, (int32_t)(rh * nrow), C_LINE);
+            if (pt->flag[st] & SF_TIE) {     /* a tie: the note before, carried on */
+                if (pitch >= 0)
+                    cv_rect(x - 1, gy + (int32_t)((hi - (uint32_t)pitch) * rh), cw, (int32_t)rh, st == cur ? C_WHITE : C_HI);
+            } else if (pt->vel[st]) {
+                pitch = pt->note[st];
+                cv_rect(x + 1, gy + (int32_t)((hi - (uint32_t)pitch) * rh), cw - 2, (int32_t)rh,
+                        st == cur ? C_WHITE : C_HI);
+            } else {
+                pitch = -1;
+            }
+        }
+        cv_blit(0, 36);
+        goto foot;
+    }
+    if (pf.on && PAGE[set.page].btn != B_SEQ) {   /* the SMK-37's panel: the eight knobs, the four faders (the foot
                                               * without its scope, for room) */
         short_foot = 1;
         cv_begin(240, 124, C_BLACK);
@@ -2009,8 +2202,13 @@ foot:
     cv_begin(240, short_foot ? 38 : 64, C_BLACK);
     cv_text(4, 2, &FONT_XS, "WHEEL", C_GRAY);
     bar(48, 6, 60, wheel_now, 127u, 0, C_HI);
+#if APP_SMK
+    cv_text(116, 2, &FONT_XS, "VOL", C_GRAY);   /* (the SMK-37's keys have no pressure: the volume) */
+    bar(140, 6, 36, vol_pct(), 100u, 0, C_HI);
+#else
     cv_text(118, 2, &FONT_XS, "AT", C_GRAY);
     bar(136, 6, 40, at_now, 127u, 0, C_HI);
+#endif
     cv_text(186, 2, &FONT_XS, "OCT", C_GRAY);
     t[0] = set.octave < 0 ? '-' : '+';
     t[1] = (char)('0' + (set.octave < 0 ? -set.octave : set.octave));
@@ -2081,6 +2279,7 @@ void app_ui_init(void)
     touch_on(1);
 #if APP_SMK
     plat_smk_k1_raw(pf.on);                  /* (the panel at power-on: K1 a knob of it) */
+    plat_smk_volume(50);                     /* (the volume at power-on: half) */
 #endif
     lcd_fill(0, 0, 240, 240, C_BLACK);
     ui.redraw = 1;
@@ -2136,6 +2335,14 @@ int app_expect(const char *what, int *got)
         *got = pf.bank;
     else if (!strncmp(what, "caught", 6))
         *got = pf.caught[(what[6] - '0') & 3];
+    else if (!strcmp(what, "roll"))
+        *got = set.page == PG_ROLL;
+    else if (!strcmp(what, "rollpick"))
+        *got = (int)roll_pick;
+    else if (!strcmp(what, "seqedit"))
+        *got = (int)seq_edit;
+    else if (!strcmp(what, "vol"))
+        *got = (int)vol_pct();
 #endif
     else if (!strcmp(what, "sustain"))
         *got = sus_on ? 127 : 0;
