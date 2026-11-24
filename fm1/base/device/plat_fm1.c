@@ -119,6 +119,15 @@ void plat_leds(uint32_t buttons, uint32_t keys)
     plat_lights(buttons, keys, 0, 0, 0);
 }
 static uint32_t smk_btn_seen;
+void plat_smk_k1_raw(int on) { smk_k1_raw = (uint8_t)(on != 0); smk_k1_acc = 0; }
+int32_t plat_smk_k1(void)
+{
+    int32_t e;
+    (void)fm1_adc_read(FM1_ADC_MASTER);      /* (takes K1's detents) */
+    e = smk_k1_acc;
+    smk_k1_acc = 0;
+    return e;
+}
 uint32_t plat_smk_buttons(void) { return fm1_in.buttons & 0xFu; }   /* (ids 0..3 are KNOB BANK, FADER BANK, <, >) */
 uint32_t plat_smk_button_hits(void)
 {

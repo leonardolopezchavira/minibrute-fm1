@@ -1361,16 +1361,145 @@ static struct {
     uint8_t outer[SMK_NKEYBED];              /* an outer key's note + 1 while it sounds (0: none) */
 } smk = {-1, {0}};
 
+/* The SMK-37's own panel (phase 2): at power-on the eight knobs are the MiniBrute's character and shaping, the four
+ * faders its oscillator mixer. KNOB BANK switches the knobs to the pages (the FM-1's way: K1 volume, K2 SELECT, K3
+ * ALGO, K4 PRESET, K5..K8 the page's four) and back; FADER BANK steps the faders A..D; < and > the patch (on the
+ * panel, where PRESET is a knob). A fader takes a value over once it reaches it (no jump on a patch change): until then
+ * the header says where to. */
+#define PK_DECREL 0xFEu                      /* knob 7: decay and release, the amp's and the filter's, together */
+static const uint8_t PK[8] = {P_ULTRA, P_METAL, P_BRUTE, P_CUT, P_RES, P_FENV, PK_DECREL, P_LRATE};
+static const char *const PK_NAME[8] = {"ULTRASAW", "METAL", "BRUTE", "CUTOFF", "RESO", "ENV AMT", "DEC/REL", "LFO RATE"};
+static const uint8_t PF[4][4] = {{P_SAW, P_SQR, P_TRI, P_SUB}, {P_FA, P_FD, P_FS, P_FR}, {P_AA, P_AD, P_AS, P_AR},
+                                 {P_NOISE, P_XMIX, P_DMIX, P_RMIX}};
+static const char *const PF_BANK[4] = {"MIXER", "FILT ENV", "AMP ENV", "NOISE FX"};
+static const char *const PF_SHORT[4][4] = {{"SAW", "SQUARE", "TRI", "SUB"}, {"ATTACK", "DECAY", "SUSTAIN", "RELEASE"},
+                                           {"ATTACK", "DECAY", "SUSTAIN", "RELEASE"}, {"NOISE", "DIST", "DELAY", "REVERB"}};
+static struct {
+    uint8_t on;                              /* 1: the knobs are the panel's (0: the pages') */
+    uint8_t bank;                            /* the faders' bank, 0..3 (A..D) */
+    int16_t last[4];                         /* each fader's last reading (-1: none yet) */
+    uint8_t caught[4];                       /* 1: the fader holds its value */
+    int16_t wrote[4];                        /* the value it last set (another change lets it go) */
+    uint32_t turned_at[8];                   /* a knob's last turn (the screen lights it) */
+    uint32_t moved_at[4];                    /* a fader's */
+} pf = {1, 0, {-1, -1, -1, -1}, {0}, {0}, {0}, {0}};
+
+static void param_cc(uint32_t p)             /* a parameter's value out as its CC */
+{
+    if (p < NP)
+        plat_midi_send(0x0Bu | 0xB0u << 8 | (uint32_t)PARAM[p].cc << 16 |
+                           (is_enum(PARAM[p].type) ? set.cur.v[p] * 127u / pmax(p) : set.cur.v[p]) << 24,
+                       TO_USB | TO_BLE);
+}
+
+static void pf_knob(uint32_t i, int32_t e)   /* panel knob i (0..7) turned e detents */
+{
+    uint32_t p = PK[i];
+    int32_t step = e > 1 || e < -1 ? 3 * e : e;   /* (a fast turn moves further) */
+    char t[16];
+    pf.turned_at[i] = plat_ms();
+    ui.redraw = 1;
+    if (p == PK_DECREL) {                    /* each moves by the same steps: the patch's shape kept */
+        static const uint8_t DR[4] = {P_AD, P_AR, P_FD, P_FR};
+        uint32_t j;
+        for (j = 0; j < 4u; j++) {
+            param_set(DR[j], (int32_t)pget(DR[j]) + step);
+            param_cc(DR[j]);
+        }
+        value_text(P_AD, pget(P_AD), t);
+        app_say("DEC/REL", t);
+        return;
+    }
+    if (is_enum(pinfo(p)->type))
+        step = e > 0 ? 1 : -1;
+    param_set(p, (int32_t)pget(p) + step);
+    param_cc(p);
+    value_text(p, pget(p), t);
+    app_say(PK_NAME[i], t);
+}
+
+static void pf_set(int on)
+{
+    pf.on = (uint8_t)(on != 0);
+    plat_smk_k1_raw(pf.on);
+    app_say("KNOBS", pf.on ? "PANEL" : "PAGES");
+}
+
+static void pf_fader_bank(uint32_t b)
+{
+    uint32_t i;
+    char t[12] = "FADERS ";
+    pf.bank = (uint8_t)(b & 3u);
+    for (i = 0; i < 4u; i++)
+        pf.caught[i] = 0;
+    t[7] = (char)('A' + pf.bank);
+    t[8] = 0;
+    app_say(t, PF_BANK[pf.bank]);
+}
+
+static void pf_faders(void)
+{
+    uint32_t i;
+    for (i = 0; i < 4u; i++) {
+        int f = plat_fader((int)i);
+        uint32_t p = PF[pf.bank][i], max = pmax(p);
+        int32_t v, cur = (int32_t)pget(p), was = pf.last[i];
+        char t[16], n[16];
+        if (pf.caught[i] && cur != pf.wrote[i])   /* the patch changed under it: let go */
+            pf.caught[i] = 0;
+        if (f < 0 || f == was)
+            continue;
+        pf.last[i] = (int16_t)f;
+        if (was < 0)                         /* (the first reading: where it is, nothing moved) */
+            continue;
+        v = (int32_t)((uint32_t)f * max + 63u) / 127;
+        if (!pf.caught[i]) {                 /* caught when it reaches the value, or passes it */
+            int32_t w = (int32_t)(((uint32_t)was * max + 63u) / 127u);
+            if ((v - cur) * (w - cur) <= 0 || v == cur)
+                pf.caught[i] = 1;
+        }
+        pf.moved_at[i] = plat_ms();
+        ui.redraw = 1;
+        if (!pf.caught[i]) {
+            value_text(p, (uint32_t)cur, n);
+            t[0] = 0;
+            text_cat(t, v < cur ? "UP TO " : "DOWN TO ");
+            text_cat(t, n);
+            app_say(PF_SHORT[pf.bank][i], t);
+            continue;
+        }
+        param_set(p, v);
+        param_cc(p);
+        pf.wrote[i] = (int16_t)pget(p);
+        value_text(p, pget(p), t);
+        app_say(PF_SHORT[pf.bank][i], t);
+    }
+}
+
 static void smk_note(uint32_t note, uint32_t vel)
 {
     post(vel ? Q_ON : Q_OFF, note, vel);
     plat_midi_send(vel ? 0x09u | 0x90u << 8 | note << 16 | vel << 24 : 0x08u | 0x80u << 8 | note << 16, TO_USB | TO_BLE);
 }
 
+static void slot_load(uint32_t s);
 static void smk_input(void)
 {
     int32_t k, bend, mod;
     int ped;
+    uint32_t hits = plat_smk_button_hits();
+    if (hits & (1u << SB_KNOB_BANK))
+        pf_set(!pf.on);
+    if (hits & (1u << SB_FADER_BANK))
+        pf_fader_bank(pf.bank + 1u);
+    if (hits & ((1u << SB_LEFT) | (1u << SB_RIGHT))) {   /* < >: the patch before, the next */
+        char t[16];
+        slot_load((set.slot + NSLOT + ((hits & (1u << SB_RIGHT)) ? 1u : NSLOT - 1u)) % NSLOT);
+        name_text(&set.cur, t);
+        app_say("PATCH", t);
+    }
+    pf_faders();
+    plat_smk_leds((pf.on ? 1u << SB_KNOB_BANK : 0u) | (pf.bank ? 1u << SB_FADER_BANK : 0u));
     if (plat_wheels(&bend, &mod)) {
         uint32_t b14 = (uint32_t)(bend + 8192);
         post(Q_BEND, 0, b14);
@@ -1540,8 +1669,23 @@ static void input(void)
         arp_posted = set.cur.v[P_ARP];
         post(Q_ARP, arp_posted, 0);
     }
+#if APP_SMK
+    if (pf.on && !sv.on) {                   /* the panel: K1 (raw), K2..K4 (SELECT, ALGO, PRESET), K5..K8 */
+        if ((e = plat_smk_k1()) != 0)
+            pf_knob(0, e);
+        for (k = 0; k < NE; k++)
+            if ((e = plat_enc((int)k)) != 0)
+                pf_knob(k + 1u, e);
+    } else {
+        (void)plat_smk_k1();
+    }
+#endif
     for (k = 0; k < NE; k++) {
         char t[16];
+#if APP_SMK
+        if (pf.on && !sv.on)
+            break;
+#endif
         if ((e = plat_enc((int)k)) == 0)
             continue;
         ui.redraw = 1;
@@ -1724,6 +1868,7 @@ static uint32_t cpu_peak;
 
 static void draw(void)
 {
+    int short_foot = 0;
     char t[24];
     uint32_t i, now = plat_ms();
     int32_t note = voice_note;
@@ -1768,6 +1913,51 @@ static void draw(void)
         cv_blit(0, 36);
         goto foot;
     }
+#if APP_SMK
+    if (pf.on) {                             /* the SMK-37's panel: the eight knobs, the four faders (the foot
+                                              * without its scope, for room) */
+        short_foot = 1;
+        cv_begin(240, 124, C_BLACK);
+        cv_text(8, 0, &FONT_XS, "PANEL", C_ACCENT);
+        t[0] = 0;
+        text_cat(t, "FADERS ");
+        {
+            char b2[2] = {(char)('A' + pf.bank), 0};
+            text_cat(t, b2);
+        }
+        text_cat(t, "  ");
+        text_cat(t, PF_BANK[pf.bank]);
+        cv_text(232 - text_w(&FONT_XS, t), 0, &FONT_XS, t, C_GRAY);
+        for (i = 0; i < 8u; i++) {           /* two rows of four, as on the keyboard */
+            uint32_t p = PK[i], v;
+            int32_t cx = 30 + (int32_t)(i % 4u) * 60, cy = 32 + (int32_t)(i / 4u) * 52;
+            int lit = pf.turned_at[i] && now - pf.turned_at[i] < 400u;
+            if (p == PK_DECREL)              /* (drawn as a knob at the amp's decay) */
+                p = P_RES, v = pget(P_AD) * 127u / pmax(P_AD);
+            else
+                v = pget(p);
+            ctl_draw(p, v, cx, cy, lit);
+            cv_text(cx - text_w(&FONT_XS, PK_NAME[i]) / 2, cy + 20, &FONT_XS, PK_NAME[i], lit ? C_WHITE : C_GRAY);
+        }
+        cv_blit(0, 36);
+        cv_begin(240, 42, C_BLACK);
+        for (i = 0; i < 4u; i++) {           /* the faders: a slot, the cap at the value (grey until caught) */
+            uint32_t p = PF[pf.bank][i], v = pget(p), max = pmax(p);
+            int32_t x = 6 + (int32_t)i * 60, top = 3, h = 36, at = top + h - (int32_t)(v * (uint32_t)h / (max ? max : 1u));
+            int lit = pf.moved_at[i] && now - pf.moved_at[i] < 400u;
+            uint16_t c = lit ? C_ACCENT : pf.caught[i] ? C_WHITE : C_GRAY;
+            cv_rect(x + 4, top, 3, h + 1, C_LINE);
+            if (pf.last[i] >= 0 && !pf.caught[i])   /* where the fader is, until it catches up */
+                cv_rect(x + 9, top + h - pf.last[i] * h / 127, 3, 2, C_DIM);
+            cv_rect(x, at - 1, 11, 3, c);
+            cv_text(x + 15, top, &FONT_XS, PF_SHORT[pf.bank][i], C_GRAY);
+            value_text(p, v, t);
+            cv_text(x + 15, top + 14, &FONT_XS, t, lit ? C_WHITE : C_HI);
+        }
+        cv_blit(0, 160);
+        goto foot;
+    }
+#endif
     cv_text(8, 0, &FONT_XS, pg->title, C_ACCENT);
     {   /* where the page is among its button's: a dot each, right-aligned */
         uint32_t n = 0, at = 0;
@@ -1816,7 +2006,7 @@ static void draw(void)
     cv_blit(0, 36);
 foot:
     /* the foot: the wheel, the pressure, the octave, and the scope */
-    cv_begin(240, 64, C_BLACK);
+    cv_begin(240, short_foot ? 38 : 64, C_BLACK);
     cv_text(4, 2, &FONT_XS, "WHEEL", C_GRAY);
     bar(48, 6, 60, wheel_now, 127u, 0, C_HI);
     cv_text(118, 2, &FONT_XS, "AT", C_GRAY);
@@ -1844,7 +2034,7 @@ foot:
         if (fx_cores)                        /* where the effects run: 2C the second core, 1C the first */
             cv_text(222, 16, &FONT_XS, fx_cores == 2u ? "2C" : "1C", C_DIM);
     }
-    {
+    if (!short_foot) {
         uint32_t w = scope_w, j;
         int32_t prev = 0;
         for (j = 0; j < 232u; j++) {
@@ -1854,7 +2044,7 @@ foot:
             prev = y;
         }
     }
-    cv_blit(0, 172);
+    cv_blit(0, short_foot ? 202 : 172);
 }
 
 #include "splash_img.h"
@@ -1889,6 +2079,9 @@ void app_ui_init(void)
     pal[3] = RGB(166, 166, 166);             /* C_AMB: secondary text #a6a6a6 */
     pal[4] = RGB(240, 96, 40);               /* C_HI: the values, as the sheet's display has them: #f06028 */
     touch_on(1);
+#if APP_SMK
+    plat_smk_k1_raw(pf.on);                  /* (the panel at power-on: K1 a knob of it) */
+#endif
     lcd_fill(0, 0, 240, 240, C_BLACK);
     ui.redraw = 1;
 }
@@ -1936,6 +2129,14 @@ int app_expect(const char *what, int *got)
 {
     if (!strcmp(what, "note"))
         *got = voice_note;
+#if APP_SMK
+    else if (!strcmp(what, "panel"))
+        *got = pf.on;
+    else if (!strcmp(what, "fbank"))
+        *got = pf.bank;
+    else if (!strncmp(what, "caught", 6))
+        *got = pf.caught[(what[6] - '0') & 3];
+#endif
     else if (!strcmp(what, "sustain"))
         *got = sus_on ? 127 : 0;
     else if (!strcmp(what, "bend"))

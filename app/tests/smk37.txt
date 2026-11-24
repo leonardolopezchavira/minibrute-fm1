@@ -56,7 +56,61 @@ expect note 84
 outer 36 up
 wait 1500
 expect note -1
-# a knob edit, SAVE SAVE into A01, then a power cycle: the store in the SMK's window
+# the panel at power-on: the eight knobs (K1 raw; K2..K4 are SELECT, ALGO, PRESET's; K5..K8 the FM-1's K1..K4)
+expect panel 1
+expect p13 127
+expect p15 39
+expect p1 19
+expect p21 50
+expect p23 43
+expect p17 37
+expect p19 31
+k1 -3
+wait 30
+expect p13 118
+turn SELECT 2
+wait 30
+expect p15 41
+turn K1 -5
+wait 30
+expect p1 14
+turn K3 2
+wait 30
+expect p21 52
+expect p23 45
+expect p17 39
+expect p19 33
+# the faders, bank A (the mixer): SAW takes over once it reaches the patch's level
+expect fbank 0
+expect p8 0
+fader 0 0
+wait 30
+fader 0 127
+wait 30
+expect caught0 1
+expect p8 127
+# < >: the patch; the fader lets go
+smkbtn RIGHT
+wait 30
+expect slot 1
+wait 30
+expect caught0 0
+smkbtn LEFT
+wait 30
+expect slot 0
+smkbtn FADER
+wait 30
+expect fbank 1
+smkbtn FADER
+smkbtn FADER
+smkbtn FADER
+wait 30
+expect fbank 0
+shot smk_panel.png
+# KNOB BANK: the pages, as on the FM-1
+smkbtn KNOB
+wait 30
+expect panel 0
 tap HOME
 wait 30
 expect page 0

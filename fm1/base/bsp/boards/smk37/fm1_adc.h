@@ -10,13 +10,19 @@ enum { FM1_ADC_BATT = 3, FM1_ADC_MASTER = 4 };
 #define SMK_ENC_MASTER 0u          /* K1, where the FM-1 has its MASTER pot (top left) */
 static struct { uint16_t con, pend, master, batt; } fm1_an;
 static int32_t smk_master = 724;
+static uint8_t smk_k1_raw;                 /* (MB-1) 1: K1 is the app's knob (plat_smk_k1), MASTER stays where it is */
+static int32_t smk_k1_acc;
 static void fm1_adc_init(void) {}
 static int32_t fm1_adc_read(uint32_t ch)
 {
     if (ch == FM1_ADC_BATT)
         return fm1_in.batt ? (int32_t)fm1_in.batt : -1;
     if (ch == FM1_ADC_MASTER) {
-        smk_master += fm1_enc_take(SMK_ENC_MASTER) * 24;
+        int32_t e = fm1_enc_take(SMK_ENC_MASTER);
+        if (smk_k1_raw)
+            smk_k1_acc += e;
+        else
+            smk_master += e * 24;
         smk_master = smk_master < 0 ? 0 : smk_master > 1023 ? 1023 : smk_master;
         return smk_master;
     }

@@ -319,6 +319,15 @@ uint32_t plat_smk_button_hits(void)
     return hit;
 }
 void plat_smk_leds(uint32_t lit) { smk_led = lit; }
+static int smk_k1_raw;                  /* (MB-1) K1 the app's knob: plat_smk_k1 (script: k1 N) */
+static int32_t smk_k1_acc;
+void plat_smk_k1_raw(int on) { smk_k1_raw = on != 0; smk_k1_acc = 0; }
+int32_t plat_smk_k1(void)
+{
+    int32_t e = smk_k1_acc;
+    smk_k1_acc = 0;
+    return e;
+}
 uint64_t plat_keybed(void) { return (uint64_t)held_keys << 5; }   /* (the outer keys: plat_outer_key's queue) */
 int plat_keybed_vel(int k) { return k >= 5 && k - 5 < NKEYS && smk_key_v[k - 5] ? smk_key_v[k - 5] : 100; }
 int32_t plat_outer_key(void) { return smk_outer_r == smk_outer_w ? -1 : smk_outer_q[smk_outer_r++ % 32u]; }
@@ -2737,6 +2746,15 @@ int main(int argc, char **argv)
         } else if (!strcmp(cmd, "modw")) {          /* modw 0..127 */
             smk_mod = atoi(a), smk_wheel_new = 1;
             run_ms(10);
+        } else if (!strcmp(cmd, "k1")) {             /* k1 N: knob K1 N detents (MASTER, or the app's while raw) */
+            int n = atoi(a);
+            if (smk_k1_raw)
+                smk_k1_acc += n;
+            else {
+                int32_t m = (int32_t)master + n * 96;
+                master = (uint32_t)(m < 0 ? 0 : m > 4096 ? 4096 : m);
+            }
+            run_ms(40);
         } else if (!strcmp(cmd, "pedal")) {         /* pedal down | up | none */
             smk_pedal = (int8_t)(!strcmp(a, "down") ? 1 : !strcmp(a, "up") ? 0 : -1);
             run_ms(10);
