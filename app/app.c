@@ -1366,10 +1366,10 @@ static void seq_step_write(uint32_t note, uint32_t vel, uint32_t flag)   /* step
     ui.redraw = 1;
 }
 
-static uint8_t bu_hold;                      /* a backup streams: nothing saved meanwhile */
+static uint8_t save_held;                      /* a backup streams: nothing saved meanwhile */
 static void seq_store(void)
 {
-    if (bu_hold)                             /* (later: it stays dirty) */
+    if (save_held)                             /* (later: it stays dirty) */
         return;
     if (plat_store_save(OBJ_SEQ, &sq, sizeof sq) == 0)
         sq_dirty = 0;
@@ -1387,7 +1387,7 @@ void app_backup_flush(void)                  /* a backup starts: what is not sav
     if (set_dirty && plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0)
         set_dirty = 0;
 }
-void app_backup_hold(int on) { bu_hold = (uint8_t)(on != 0); }
+void app_backup_hold(int on) { save_held = (uint8_t)(on != 0); }
 void app_backup_restored(void)               /* everything from the flash again, as at power-on (A01) */
 {
     store_load();
