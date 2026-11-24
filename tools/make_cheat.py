@@ -154,6 +154,8 @@ page = f"""<!DOCTYPE html>
   .bank li {{ break-inside: avoid; padding: 1px 0; }}
   .bank b {{ color: var(--hi); font-weight: 700; margin-right: 3px; }}
   .note {{ color: var(--mute); font-size: 9.2pt; margin: 5px 0 0; }}
+  .shots {{ display: flex; gap: .16in; justify-content: center; }}
+  .shots img {{ width: 2.1in; height: 2.1in; image-rendering: pixelated; border: 6px solid #111; border-radius: 6px; background: #000; }}
   footer {{ display: flex; gap: 18px; font-size: 9.5pt; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: #333; }}
   footer span b {{ color: var(--ink); }}
   footer .r {{ margin-left: auto; }}
@@ -198,13 +200,56 @@ page = f"""<!DOCTYPE html>
       <section><h2>Sequencer</h2><table class="kv">
         <tr><th>Size</th><td>64 steps &times; 8 patterns: note + velocity, rest or tie</td></tr>
         <tr><th>Play</th><td>PLAY starts / stops; the keys play over it; the arpeggiator rests</td></tr>
-        <tr><th>Record</th><td>REC stopped: step by step &middot; REC playing: in time</td></tr>
+        <tr><th>Record</th><td>REC stopped: step by step &middot; REC playing: in time &middot; REC held: cleared</td></tr>
       </table></section>
       <section><h2 class="hot">Factory bank A</h2><ul class="bank">{bank}</ul>
         <p class="note">Banks B&ndash;D start as INIT. The patch editor's <b>Factory bank A</b> puts these back (B&ndash;D stay).</p></section>
     </div>
   </div>
   <footer><span><b>Patch editor</b> reads, edits and stores all 128 slots &middot; keeps banks as .syx &middot; reads patch sheets</span><span class="r"><b>Source</b> github.com/leonardolopezchavira/minibrute-fm1</span></footer>
+</div>
+
+<div class="sheet">
+  <header><h1>MB&#8209;<em>1</em></h1><p>On the SMK-37 Pro &middot; the panel &middot; the piano roll</p><span class="v">Cheat sheet &middot; {e(version)}</span></header>
+  <div class="cols p1">
+    <div class="stack">
+      <section><h2 class="hot">The panel (KNOB BANK lit)</h2>
+        <table class="pages"><thead><tr><th></th><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr></thead><tbody>
+        <tr class="first"><th class="btn"><span>KNOBS</span></th><td>ULTRASAW</td><td>METALIZER</td><td>BRUTE</td><td>CUTOFF</td></tr>
+        <tr><th></th><td><b>K5</b> RESO</td><td><b>K6</b> ENV AMT</td><td><b>K7</b> DEC/REL</td><td><b>K8</b> LFO RATE</td></tr>
+        <tr class="first"><th class="btn"><span>FADER A</span></th><td>SAW</td><td>SQUARE</td><td>TRIANGLE</td><td>SUB</td></tr>
+        <tr><th class="btn"><span>B</span></th><td>F ATTACK</td><td>F DECAY</td><td>F SUSTAIN</td><td>F RELEASE</td></tr>
+        <tr><th class="btn"><span>C</span></th><td>A ATTACK</td><td>A DECAY</td><td>A SUSTAIN</td><td>A RELEASE</td></tr>
+        <tr><th class="btn"><span>D</span></th><td>NOISE</td><td>DIST</td><td>DELAY</td><td>REVERB</td></tr>
+        </tbody></table>
+        <p class="note">DEC/REL: the amp's and the filter's decay and release together. A fader takes over once it reaches
+        the value (UP TO / DOWN TO until then).</p></section>
+      <section><h2>Controls</h2><table class="kv">
+        <tr><th>KNOB BANK</th><td>the knobs as on the FM-1: K1 volume, K2 SELECT, K3 ALGO, K4 PRESET, K5&ndash;K8 the page's four</td></tr>
+        <tr><th>FADER BANK</th><td>the faders' bank, A&ndash;D (lit past A)</td></tr>
+        <tr><th>&lt; &gt;</th><td>the patch before, the next</td></tr>
+        <tr><th>Keys</th><td>37 with velocity, C3&ndash;C6; OCTAVE &minus;/+ three octaves either way</td></tr>
+        <tr><th>Wheels &middot; pedal</th><td>pitch bend &middot; mod wheel &middot; sustain</td></tr>
+        <tr><th>Buttons</th><td>PATCH = HOME (&times;3: RANDOM) &middot; SCALE = SEL &middot; CHORD = ENV &middot; NOTE REPEAT = LFO &middot;
+          PARA = EDIT &middot; GLOBE = GLO &middot; BT = SAVE &middot; SEQ PLAY = PLAY &middot; SEQ REC = REC</td></tr>
+        <tr><th>Volume</th><td>VOL at the foot; 50&nbsp;% at power-on; MB-1 starts on A01</td></tr>
+      </table></section>
+    </div>
+    <div class="stack">
+      <section><h2>Sequencer on the pads</h2><table class="kv">
+        <tr><th>Playing</th><td>the pads show its steps, 16 at a time: playing orange, notes white, ties dim orange</td></tr>
+        <tr><th>SEQ again</th><td>the piano roll: the pattern by pitch, rows as a keyboard's, each C named</td></tr>
+        <tr><th>Pads</th><td>pick a step (REC armed, stopped: the next key, FX or FX + key goes there)</td></tr>
+        <tr><th>&lt; &gt;</th><td>steps 1&ndash;16, 17&ndash;32, 33&ndash;48, 49&ndash;64</td></tr>
+        <tr><th>K5 &middot; K6</th><td>the step's note (a rest becomes a note) &middot; its velocity</td></tr>
+        <tr><th>K7 &middot; K8</th><td>which step &middot; NOTE / TIE / REST</td></tr>
+        <tr><th>FX</th><td>deletes the step</td></tr>
+        <tr><th>HOME</th><td>back</td></tr>
+      </table></section>
+      <div class="shots"><img src="../img/smk-panel.png" alt="The panel screen"><img src="../img/smk-roll.png" alt="The piano roll"></div>
+    </div>
+  </div>
+  <footer><span><b>Install</b> {SITE}/smk37/</span><span class="r"><b>SMK-37 Pro</b> &middot; Donner Starrykey 37 Play &middot; builds for the SMK-37 Elite and MKE-P37</span></footer>
 </div>
 
 </body>

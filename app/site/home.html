@@ -7,8 +7,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MB-1 · an aggressive monophonic virtual analog synthesizer for the M-VAVE FM-1</title>
-<meta name="description" content="MB-1: an unofficial, aggressive monophonic virtual analog synthesizer for the M-VAVE FM-1, after the MiniBrute, measured against the MiniBrute V plugin. Install it from the browser, edit its patches on a patch sheet.">
+<title>MB-1 · an aggressive monophonic virtual analog synthesizer for the M-VAVE FM-1 and SMK-37</title>
+<meta name="description" content="MB-1: an unofficial, aggressive monophonic virtual analog synthesizer for the M-VAVE FM-1 and the SMK-37 keyboard, after the MiniBrute, measured against the MiniBrute V plugin. Install it from the browser, edit its patches on a patch sheet.">
 <script>
 try { const t = localStorage.getItem("mb1-theme"); document.documentElement.dataset.theme = t || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch (e) { document.documentElement.dataset.theme = "light"; }
 </script>
@@ -77,7 +77,7 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
       <div class="sec">
         <span class="tab">Synthesizer</span>
         <div class="mark" aria-hidden="true">MB<span>-</span>1</div>
-        <p class="sub">for the M-VAVE FM-1</p>
+        <p class="sub">for the M-VAVE FM-1 and SMK-37</p>
         <h1>An aggressive monophonic virtual analog synthesizer for the M-VAVE FM-1, after the MiniBrute and measured against it.</h1>
         <p>MB-1 turns the FM-1 into one fat analog-style voice: a sawtooth with Ultrasaw, a square with pulse width, a
         triangle with Metalizer, a sub oscillator and noise into a resonant 12&nbsp;dB multimode filter with Brute Factor.
@@ -85,7 +85,8 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
         <p>128 patch slots, an arpeggiator, a 64-step sequencer and five effects. Install it from the browser, and put
         the stock firmware back whenever you like.</p>
         <div class="cta">
-          <a class="btn pri" href="install/">Install</a>
+          <a class="btn pri" href="install/">Install on the FM-1</a>
+          <a class="btn pri" href="smk37/">On the SMK-37</a>
           <a class="btn" href="edit/">Patch editor</a>
           <a class="btn" href="emu/">Try it in the browser</a>
           <a class="btn" href="manual/">Manual</a>
@@ -108,6 +109,29 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
     <div class="sec stat" role="listitem"><span class="tab">Play</span><div class="n">64</div><div class="k">Sequencer steps</div><p>An arpeggiator and an 8-pattern step sequencer.</p></div>
     <div class="sec stat" role="listitem"><span class="tab">Effects</span><div class="n">5</div><div class="k">Effects</div><p>Distortion, Juno-style chorus, delay, reverb and a compressor.</p></div>
   </div>
+
+  <section class="part">
+    <div class="panel two">
+      <div class="sec">
+        <span class="tab">SMK-37</span>
+        <h2>On a keyboard: the SMK-37 Pro.</h2>
+        <p>MB-1 also runs on the M-Vave SMK-37 Pro (and the Donner Starrykey 37 Play), with a panel of its own after the
+        MiniBrute's: the four faders are the oscillator mixer, the eight knobs Ultrasaw, Metalizer, Brute, cutoff,
+        resonance, envelope amount, decay/release and LFO rate.</p>
+        <ul>
+          <li>37 keys with velocity, pitch and mod wheels, a sustain pedal.</li>
+          <li>The pads show the sequencer's steps; a piano roll to see and edit the pattern.</li>
+          <li>The same patches, sound and patch editor as on the FM-1.</li>
+        </ul>
+        <div class="cta"><a class="btn pri" href="smk37/">Install on the SMK-37</a></div>
+      </div>
+      <div class="sec screen">
+        <span class="tab">On the SMK-37</span>
+        <div><img src="img/smk-panel.png" width="240" height="240" alt="MB-1's panel screen on the SMK-37: eight knobs and the four faders as the oscillator mixer">
+        <div class="cap">The panel: eight knobs, four faders</div></div>
+      </div>
+    </div>
+  </section>
 
   <section class="part">
     <div class="panel two">

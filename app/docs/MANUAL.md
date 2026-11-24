@@ -3,8 +3,9 @@
 MB-1 turns the FM-1 into an aggressive monophonic virtual analog synthesizer, after the Arturia MiniBrute and
 measured against its MiniBrute V plugin. One voice, last-note priority: hold a key, play another, let it go, and the
 first comes back (with glide, if GLIDE is up). It keeps 128 patches, has an arpeggiator, a 64-step sequencer and five
-effects, and comes with a patch editor in the browser. A two-page [cheat sheet](../cheat/) (PDF) sums this manual
-up, to keep beside the FM-1.
+effects, and comes with a patch editor in the browser. A [cheat sheet](../cheat/) (PDF) sums this manual up, to keep
+beside the FM-1. MB-1 also runs on the M-Vave SMK-37 Pro keyboard, with a panel of its own: see
+[On the SMK-37](#on-the-smk-37) below.
 
 ![Playing](img/playing.png)
 
@@ -160,6 +161,9 @@ LFO CLK on ARP.
   pattern is as long as the steps entered (LENGTH changes it later). Press REC again to finish.
 - **Recording in time**: while it plays, press **REC**. A key goes to the nearest step (the one playing, or the next
   if it is more than half over); held over the steps after, it writes ties. Press REC again to finish.
+- **Clearing**: **REC** held a second clears the pattern (all rests, 16 steps).
+- **The range**: OCT- / OCT+ move the keys three octaves either way, so steps can be any note of an 88-key piano
+  (A0..C8) and more.
 
 Each note sounds for half its step, or on through its ties. The patterns are stored by themselves (a couple of
 seconds after a change, while stopped; SAVE also stores them) and kept over power-off.
@@ -298,3 +302,28 @@ sent out over USB and Bluetooth.
 | 100 | MTL ENV | TRI |
 
 Choices (MODE, WAVE, ...) take the CC range in equal parts.
+
+## On the SMK-37
+
+MB-1 runs on the M-Vave SMK-37 Pro and the Donner Starrykey 37 Play (the same keyboard), with builds for the SMK-37
+Elite and the MKE-P37 (not tried on a keyboard). Install it from [its page](../smk37/). Everything above works there,
+with the keyboard's buttons by their FM-1 names (PATCH = HOME, SCALE = SEL, CHORD = ENV, NOTE REPEAT = LFO, PARA = EDIT,
+GLOBE = GLO, BT = SAVE, SEQ PLAY = PLAY, SEQ REC = REC), and it adds its own:
+
+| Control | What it does |
+| --- | --- |
+| The panel (KNOB BANK lit, at power-on) | K1 Ultrasaw, K2 Metalizer, K3 Brute, K4 Cutoff, K5 Resonance, K6 Env amount, K7 Decay/Release (the amp's and the filter's decay and release together), K8 LFO rate |
+| KNOB BANK | The knobs as on the FM-1 (K1 volume, K2 SELECT, K3 ALGO, K4 PRESET, K5..K8 the page's four, named K5..K8 on the screen), and back |
+| Faders, FADER BANK | A: the oscillator mixer (saw, square, triangle, sub); B: the filter envelope; C: the amp envelope; D: noise, distortion, delay and reverb mix. A fader takes over once it reaches the value (no jumps): until then the screen says UP TO or DOWN TO |
+| < > | The patch before, the next; on the piano roll, its steps |
+| Volume | K1 on the pages; VOL at the foot of the screen; 50 % at power-on |
+| Keys | All 37 (C3..C6) with velocity; OCT- / OCT+ three octaves either way |
+| Wheels, pedal | Pitch bend, the mod wheel, sustain |
+| Pads | The white keys; while the sequencer plays, its steps (16 at a time: the step playing orange, notes white, ties dim orange) |
+
+**The piano roll**: SEQ pressed a second time. The pattern by pitch, 16 steps at a time, its rows drawn as a
+keyboard's (white keys' rows grey, black keys' dark, each C named); the meters make room for it. The pads pick a step,
+< and > show steps 1-16, 17-32, 33-48 and 49-64, and the knobs edit the step picked: K5 its note (a rest becomes a
+note), K6 its velocity, K7 which step, K8 NOTE / TIE / REST; FX deletes it. With REC armed and the sequencer stopped,
+the next key, FX or FX with a key goes into the step picked. HOME goes back.
+

@@ -29,66 +29,91 @@
     letter-spacing: .08em; text-transform: uppercase; padding: 9px 16px; border-radius: 3px; }
   .dl a.alt { background: transparent; color: var(--mb-ink, #000); box-shadow: inset 0 0 0 2px var(--mb-ink, #000); }
   .small { font-size: 14px; color: var(--mb-mute, #555); }
+  .shots { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 14px; }
+  .shots figure { margin: 0; }
+  .shots img { width: 240px; height: 240px; image-rendering: pixelated; border-radius: 8px; border: 8px solid #111; background: #000; display: block; }
+  .shots figcaption { font-size: 14px; color: var(--mb-mute, #555); margin-top: 6px; }
 </style>
 </head>
 <body>
 <main>
   <h1>MB-1 on the SMK-37</h1>
-  <p class="lede">For the M-Vave SMK-37 Pro and the Donner Starrykey 37 Play (the same keyboard), with builds for the
-  SMK-37 Elite and the MKE-P37. Version {{VERSION}}.</p>
+  <p class="lede">An aggressive monophonic virtual analog synthesizer for the M-Vave SMK-37 Pro and the Donner
+  Starrykey 37 Play (the same keyboard), with builds for the SMK-37 Elite and the MKE-P37.</p>
 
-  <section class="warn">
-    <h2>Preview</h2>
-    <p>MB-1 on the keyboard, with a panel of its own: the faders as the oscillator mixer and eight knobs for the
-    Brute controls. The pads come next. Tried on an SMK-37 Pro; the SMK-37 Elite and MKE-P37 builds have not been.</p>
+  <section>
+    <h2>What you get</h2>
+    <div class="shots">
+      <figure><img src="../img/smk-panel.png" width="240" height="240" alt="MB-1's panel screen on the SMK-37: eight knobs (Ultrasaw, Metal, Brute, Cutoff, Reso, Env amt, Dec/Rel, LFO rate) and the four faders as the oscillator mixer"><figcaption>The panel: eight knobs, four faders</figcaption></figure>
+      <figure><img src="../img/smk-roll.png" width="240" height="240" alt="MB-1's piano roll on the SMK-37: 16 steps of the pattern, the rows drawn as a keyboard's, C4 and C5 named"><figcaption>The sequencer's piano roll</figcaption></figure>
+    </div>
+    <p>The same MB-1 as on the FM-1 (the same sound, the 128 patches, the factory bank, the arpeggiator, the sequencer
+    and the effects), on a keyboard with more to hold on to: 37 keys with velocity, a panel of eight knobs and four
+    faders laid out after the MiniBrute's, 16 pads that show and pick the sequencer's steps, pitch and mod wheels and a
+    sustain pedal jack. The patches, the .syx files and the <a href="../edit/">patch editor</a> are the FM-1's.</p>
+    <p class="small">Tried on an SMK-37 Pro. The Donner Starrykey 37 Play is the same keyboard; the SMK-37 Elite and
+    MKE-P37 builds have not been tried on a keyboard.</p>
   </section>
 
   <section>
     <h2>Install</h2>
     <p>Connect the keyboard by USB (switched on, as it is), open the installer for your model in Chrome or Edge and
-    press Install.</p>
+    press Install. Updates: the same installer, the same way; your patches, patterns and settings stay.</p>
     <div class="dl">
       <a href="install/">SMK-37 Pro / Starrykey 37 Play</a>
       <a class="alt" href="install-elite/">SMK-37 Elite</a>
       <a class="alt" href="install-mke/">MKE-P37</a>
     </div>
-    <p>MB-1 keeps its patches and settings in the keyboard's own store (16 of its sectors); it never writes the
-    keyboard's calibration, its Bluetooth data or its stock presets. Back to M-Vave's firmware: install it with
-    M-Vave's updater, as for any update.</p>
+    <p>Version {{VERSION}}. MB-1 keeps its patches and settings in the keyboard's own store (16 of its sectors); it
+    never writes the keyboard's calibration, its Bluetooth data or its stock presets. Back to M-Vave's firmware:
+    install it with M-Vave's updater, as for any update.</p>
     <p id="backup" class="small">A full backup of the keyboard's flash first is optional; it is the same keyboard as
     SQ-80's, so its steps (Windows, about ten minutes, once) are on
     <a href="https://leonardolopezchavira.github.io/sq80-fm1/smk37/">SQ-80's SMK-37 page</a>.</p>
   </section>
 
   <section>
-    <h2>The controls</h2>
+    <h2>The panel</h2>
     <table>
-      <tr><td>Knobs (the panel)</td><td>At power-on: K1 Ultrasaw · K2 Metalizer · K3 Brute Factor · K4 Cutoff ·
-        K5 Resonance · K6 Env amount · K7 Decay/Release (the amp's and the filter's decay and release together) · K8 LFO
-        rate. The value shows at the top of the screen as you turn.</td></tr>
-      <tr><td>KNOB BANK</td><td>Lit: the panel. Pressed: the knobs as on the FM-1 (K1 volume, K2 SELECT, K3 ALGO
-        (the mod wheel), K4 PRESET, K5–K8 the page's four, which the screen names K5–K8); again, the panel</td></tr>
+      <tr><td>Knobs</td><td>At power-on (KNOB BANK lit): K1 Ultrasaw · K2 Metalizer · K3 Brute Factor · K4 Cutoff ·
+        K5 Resonance · K6 Env amount · K7 Decay/Release (the amp's and the filter's decay and release together, the
+        patch's shape kept) · K8 LFO rate. The value shows at the top of the screen as you turn.</td></tr>
+      <tr><td>KNOB BANK</td><td>Switches the knobs to the pages, as on the FM-1 (K1 volume, K2 SELECT, K3 ALGO: the
+        mod wheel, K4 PRESET, K5–K8 the page's four, which the screen names K5–K8), and back</td></tr>
       <tr><td>Faders</td><td>FADER BANK steps A–D (lit past A): A the oscillator mixer (saw, square, triangle, sub) ·
         B the filter envelope · C the amp envelope · D noise, distortion, delay and reverb mix. A fader takes over a
-        value once it reaches it (no jumps on a patch change): until then the screen says UP TO or DOWN TO.</td></tr>
-      <tr><td>&lt; &gt;</td><td>The patch before, the next</td></tr>
-      <tr><td>Volume</td><td>K1 on the pages (KNOB BANK); the foot of the screen shows it (VOL), and the top as it
-        changes. It starts at 50 % at power-on.</td></tr>
-      <tr><td>Sequencer</td><td>As on the FM-1 (SEQ, PLAY, REC; SEQ REC held a second clears the pattern). While it plays, the pads show its steps, 16 at a
-        time: the step playing orange, notes white, ties dim orange. SEQ pressed again: the piano roll, the pattern
-        drawn by pitch; there the pads pick a step (with REC armed and stopped, the next key, FX for a rest, or FX with a
-        key held for a tie, goes into it), and &lt; or &gt; show the 16 steps before or after (1–16, 17–32, 33–48, 49–64; there &lt; &gt; do not change the patch). Its rows are a keyboard's: white keys' rows grey, black keys' dark, the keys drawn at the left and each C named. The knobs edit the step picked: K5 its note (a rest becomes a note), K6 its
-        velocity, K7 which step (one past the end adds a step), K8 NOTE, TIE or REST; FX deletes it (a rest). HOME
-        (or any page button) goes back.</td></tr>
-      <tr><td>Keys</td><td>All 37 play (C3–C6; OCTAVE − / + move them three octaves either way: C0–C9, an 88-key piano's range and more), with their velocity</td></tr>
+        value once it reaches it, so nothing jumps on a patch change: until then the screen says UP TO or DOWN TO.</td></tr>
+      <tr><td>&lt; &gt;</td><td>The patch before, the next (on the piano roll: its steps)</td></tr>
+      <tr><td>Volume</td><td>K1 on the pages; the foot of the screen shows it (VOL), the top as it changes. 50 % at
+        power-on.</td></tr>
+      <tr><td>Keys</td><td>All 37 play (C3–C6) with their velocity; OCTAVE − / + move them three octaves either way
+        (C0–C9: an 88-key piano's range and more)</td></tr>
       <tr><td>Wheels · pedal</td><td>Pitch bend (the patch's BEND range) · the mod wheel · sustain</td></tr>
       <tr><td>Pads</td><td>The white keys of the FM-1's two octaves; the sequencer's steps while it plays and on the
-        piano roll (below)</td></tr>
+        piano roll</td></tr>
       <tr><td>Buttons</td><td>As on the FM-1: PATCH = HOME (three times: RANDOM), SCALE = SEL, CHORD = ENV,
         NOTE REPEAT = LFO, PARA = EDIT, FX, GLOBE = GLO, BT = SAVE, ARP, SEQ, SEQ PLAY = PLAY, SEQ REC = REC</td></tr>
     </table>
-    <p>The rest works as <a href="../manual/">the manual</a> says for the FM-1; the patches, the .syx files and the
-    <a href="../edit/">patch editor</a> are the same.</p>
+    <p>MB-1 starts on A01 at power-on, as stored.</p>
+  </section>
+
+  <section>
+    <h2>The sequencer</h2>
+    <p>The FM-1's, after the KeyStep's: SEQ its page, SEQ PLAY starts and stops it, SEQ REC arms recording (stopped:
+    a key a step, FX a rest, FX with a key held a tie; playing: in time). SEQ REC held a second clears the pattern.
+    While it plays the pads show its steps, 16 at a time: the step playing orange, notes white, ties dim orange.</p>
+    <table>
+      <tr><td>Piano roll</td><td>SEQ pressed again. The pattern by pitch, 16 steps at a time, its rows a keyboard's
+        (white keys' rows grey, black keys' dark, each C named); the step playing marked above, the step picked framed
+        and named at the top</td></tr>
+      <tr><td>Pads</td><td>Pick a step (with REC armed and stopped, the next key, FX or FX with a key goes into it)</td></tr>
+      <tr><td>&lt; &gt;</td><td>The 16 steps before or after: 1–16, 17–32, 33–48, 49–64 (past the pattern's end too:
+        a step picked there makes it longer)</td></tr>
+      <tr><td>K5 · K6</td><td>The step's note (a rest becomes a note; heard as it changes) · its velocity</td></tr>
+      <tr><td>K7 · K8</td><td>Which step · NOTE, TIE or REST</td></tr>
+      <tr><td>FX</td><td>Deletes the step (a rest)</td></tr>
+      <tr><td>HOME</td><td>Back (or any page button)</td></tr>
+    </table>
   </section>
 
   <p class="small">The SMK-37 support builds on genkigenki's fm1-to-smk37 kit and SMK-37 layer (GPL-3.0), by way of

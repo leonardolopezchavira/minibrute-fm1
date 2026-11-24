@@ -1,10 +1,16 @@
-# MB-1 for the M-VAVE FM-1
+# MB-1 for the M-VAVE FM-1 and SMK-37
 
 An unofficial, aggressive monophonic virtual analog synthesizer firmware for the M-VAVE FM-1, after the Arturia
 MiniBrute: written from scratch and measured against Arturia's MiniBrute V plugin. Built on [fm1-base](https://github.com/charlesvestal/fm1-base), laid
 out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
 
 - **Install, patch editor, manual, emulator, cheat sheet:** https://leonardolopezchavira.github.io/minibrute-fm1/
+- **On the M-Vave SMK-37 Pro** (and the Donner Starrykey 37 Play; builds for the SMK-37 Elite and MKE-P37, not tried):
+  https://leonardolopezchavira.github.io/minibrute-fm1/smk37/. The same MB-1, with the keyboard's own: a panel after
+  the MiniBrute's (the four faders the oscillator mixer, eight knobs for Ultrasaw, Metalizer, Brute, cutoff,
+  resonance, envelope amount, decay/release and LFO rate; KNOB BANK and FADER BANK for the rest), 37 keys with
+  velocity, the wheels and the sustain pedal, the pads showing and picking the sequencer's steps, and a piano roll
+  to see and edit a pattern.
 - **Also on [The Firmware Hub](https://thefirmwarehub.com/)**, as MB-1 (identity `FM-1_49XXYYZZ`: 0.15.0 is
   `FM-1_49001500`); its card's text is [`fmhub.json`](fmhub.json).
 - **The voice:** sawtooth with Ultrasaw, square with PWM, triangle with Metalizer, sub (square or sine, -1 or -2
@@ -36,14 +42,17 @@ out like [sq80-fm1](https://github.com/leonardolopezchavira/sq80-fm1).
 | `app/splash/` | The start-up screen (SVG and its 240 x 240 PNG); `tools/make_splash.py` makes `app/splash_img.h` from it |
 | `tools/` | The site's and editor's build steps (`build_editor.sh`, `make_home.py`, `site_theme.py`, `make_cheat.py`: the cheat sheet, from the manual's tables), `make_splash.py` and `make_factory.py` |
 | `fmhub.json`, `docs/img/card.png` | The Firmware Hub's card: its text and picture |
-| `app/tests/basic.txt` | Host simulator checks |
-| `fm1/base/` | fm1-base, vendored |
+| `app/tests/basic.txt`, `app/tests/smk37.txt` | Host simulator checks: the FM-1's, the SMK-37's |
+| `app/smk37/` | The SMK-37's page; `tools/make_smk_install.py` makes its installers (after SQ-80's) |
+| `fm1/base/` | fm1-base, vendored from SQ-80's copy (its SMK-37 board); MB-1's additions in `fm1/base/UPSTREAM.md` |
 
 ## Build
 
     python3 fm1/base/tools/build.py app --host        # the host simulator, then:
     app/build/host/mb1_host app/tests/basic.txt app/build/host
     python3 fm1/base/tools/build.py app --release 0.1.0   # the firmware (JieLi toolchain; CI does this)
+    BOARD=smk37 MODEL=pro python3 fm1/base/tools/build.py app --release 0.1.0   # the SMK-37's (pro, elite, mke)
+    BOARD=smk37 python3 fm1/base/tools/build.py app --host   # its simulator: app/tests/smk37.txt
     sh tools/build_editor.sh /tmp/edit                # the patch editor and its engine (clang, wasm-ld)
 
 Every push to `main` builds the firmware on GitHub Actions (zvenson/fm1-build) and publishes the site: fm1-base's

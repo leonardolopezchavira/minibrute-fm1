@@ -8,7 +8,7 @@ sequencer and five effects; 128 patch slots.
 
 This is version {{VERSION}}. You install it at your own risk, and the installer can put M-VAVE's own firmware back.
 
-- [Install](install/) it from Chrome or Edge, with the FM-1 connected by USB.
+- [Install](install/) it from Chrome or Edge, with the FM-1 connected by USB; on the SMK-37 keyboard, see [its page](smk37/).
 - Edit patches on a patch sheet in the [patch editor](edit/).
 - Read the [manual](manual/), or keep the [cheat sheet](cheat/) beside the FM-1.
 - [Try it in the browser](emu/).

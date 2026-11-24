@@ -9,5 +9,11 @@
   "cheat": "https://leonardolopezchavira.github.io/minibrute-fm1/cheat/MB-1_cheatsheet.pdf",
   "image": "docs/img/card.png",
   "color": "#F06028",
-  "sounds": "own: synth patches only (parameter settings, no samples), programmed for MB-1; A01-A23 approximate sounds of Arturia MiniBrute V factory presets, A24-A32 were made with MB-1's RANDOM"
+  "sounds": "own: synth patches only (parameter settings, no samples), programmed for MB-1; A01-A23 approximate sounds of Arturia MiniBrute V factory presets, A24-A32 were made with MB-1's RANDOM",
+  "smk37": {
+    "what": "MB-1 on the SMK-37 Pro with a MiniBrute-style panel: the faders are the oscillator mixer, eight knobs for Ultrasaw, Metalizer, Brute, cutoff, resonance, env amount, decay/release and LFO rate. 37 velocity keys, wheels, sustain, and the pads and a piano roll for the 64-step sequencer.",
+    "image": "docs/img/card-smk37.png",
+    "install": "https://leonardolopezchavira.github.io/minibrute-fm1/smk37/install/",
+    "guide": "https://leonardolopezchavira.github.io/minibrute-fm1/smk37/"
+  }
 }
