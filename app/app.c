@@ -1505,9 +1505,13 @@ static void pf_faders(void)
  * Elsewhere the pads are the white keys, as before. */
 static uint32_t roll_win;                    /* the piano roll's 16 steps: roll_win * 16 .. + 15 (stopped) */
 static uint32_t roll_pick = 0xFFu;           /* the step the pads picked (0xFF: none) */
+static void roll_say(void);
 static uint32_t roll_window(void)
 {
-    uint32_t L = seq_len(seq_pat()), nwin = (L + 15u) / 16u;
+    uint32_t L = seq_len(seq_pat()), nwin;
+    if (roll_pick < NSTEP && roll_pick + 1u > L)   /* (a step picked past the end: shown) */
+        L = roll_pick + 1u;
+    nwin = (L + 15u) / 16u;
     if (seq_running)
         return seq_cur_now / 16u;
     if (seq_rec)                             /* (step entry: where the next step goes) */
@@ -1537,11 +1541,7 @@ static void pf_pads(void)
             seq_edit = roll_pick;
             seq_picked = 1;
         }
-        {
-            char t[12];
-            int_text((int32_t)roll_pick + 1, t);
-            app_say("STEP", t);
-        }
+        roll_say();
         ui.redraw = 1;
     }
     {
@@ -1573,6 +1573,105 @@ static void pf_pads(void)
             said = hash;
         }
     }
+}
+
+/* On the piano roll the knobs K5..K8 edit the step picked (a pad, or K7): K5 its note (a semitone a detent; a rest
+ * becomes a note), K6 its velocity, K7 which step, K8 what it is (NOTE, TIE, REST); FX makes it a rest (deleted). */
+static void note_name(int32_t n, char *b)    /* "C#4" */
+{
+    static const char *const N[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    char o[6];
+    b[0] = 0;
+    text_cat(b, N[(n % 12 + 12) % 12]);
+    int_text(n / 12 - 1, o);
+    text_cat(b, o);
+}
+
+static void roll_say(void)                   /* the step picked, at the top */
+{
+    const seqpat_t *pt = seq_pat();
+    char t[16], n[8];
+    uint32_t st = roll_pick % NSTEP;
+    int_text((int32_t)st + 1, t);
+    if (pt->flag[st] & SF_TIE)
+        text_cat(t, " TIE");
+    else if (!pt->vel[st])
+        text_cat(t, " REST");
+    else {
+        note_name(pt->note[st], n);
+        text_cat(t, " ");
+        text_cat(t, n);
+    }
+    app_say("STEP", t);
+}
+
+static void roll_changed(seqpat_t *pt, uint32_t st)
+{
+    if (pt->len < st + 1u)                   /* (a step past the end: the pattern made that long) */
+        pt->len = (uint8_t)(st + 1u);
+    sq_dirty = 1;
+    sq_changed_ms = plat_ms();
+    ui.redraw = 1;
+    roll_say();
+}
+
+static void roll_knob(uint32_t q, int32_t e)   /* K5..K8 on the piano roll (q 0..3) */
+{
+    seqpat_t *pt = seq_pat();
+    uint32_t st;
+    if (roll_pick >= NSTEP)                  /* (nothing picked yet: the window's first step) */
+        roll_pick = roll_window() * 16u;
+    st = roll_pick;
+    if (q == 2u) {                           /* K7: the step picked, left or right */
+        uint32_t L = seq_len(pt), n = L < NSTEP ? L + 1u : NSTEP;   /* (one past the end: to add a step) */
+        roll_pick = (st + n * 4u + (uint32_t)(e > 0 ? 1 : n - 1u)) % n;
+        roll_win = roll_pick / 16u;
+        if (seq_rec && !seq_running) {
+            seq_edit = roll_pick;
+            seq_picked = 1;
+        }
+        ui.redraw = 1;
+        roll_say();
+        return;
+    }
+    if (q == 0u) {                           /* K5: the note */
+        if (!pt->vel[st] || (pt->flag[st] & SF_TIE)) {   /* a rest or a tie becomes a note */
+            pt->vel[st] = pt->vel[st] ? pt->vel[st] : 100u;
+            pt->flag[st] = 0;
+        } else {
+            pt->note[st] = (uint8_t)clamp((int32_t)pt->note[st] + (e > 1 || e < -1 ? 12 * (e > 0 ? 1 : -1) : e), 0, 127);
+        }
+        post(Q_ON, pt->note[st], pt->vel[st]);   /* (heard a moment) */
+        post(Q_OFF, pt->note[st], 0);
+    } else if (q == 1u) {                    /* K6: the velocity */
+        if (pt->vel[st] && !(pt->flag[st] & SF_TIE))
+            pt->vel[st] = (uint8_t)clamp((int32_t)pt->vel[st] + (e > 1 || e < -1 ? 3 * e : e), 1, 127);
+        {
+            char t[8];
+            int_text(pt->vel[st], t);
+            app_say("VELOCITY", t);
+        }
+        sq_dirty = 1;
+        sq_changed_ms = plat_ms();
+        ui.redraw = 1;
+        return;
+    } else {                                 /* K8: NOTE -> TIE -> REST */
+        uint32_t ty = (pt->flag[st] & SF_TIE) ? 1u : pt->vel[st] ? 0u : 2u;
+        ty = (ty + 3u + (e > 0 ? 1u : 2u)) % 3u;
+        pt->flag[st] = ty == 1u ? SF_TIE : 0u;
+        pt->vel[st] = ty == 2u ? 0u : pt->vel[st] ? pt->vel[st] : 100u;
+    }
+    roll_changed(pt, st);
+}
+
+static void roll_delete(void)                /* FX on the piano roll: the step picked a rest */
+{
+    seqpat_t *pt = seq_pat();
+    if (roll_pick >= NSTEP)
+        return;
+    pt->vel[roll_pick] = 0;
+    pt->flag[roll_pick] = 0;
+    roll_changed(pt, roll_pick);
 }
 
 /* the volume (MASTER: K1 on the pages), shown in the foot and, as it changes, at the top; 50 % at power-on */
@@ -1751,6 +1850,10 @@ static void input(void)
             rec_down_ms = plat_ms();
             rec_long = 0;
         }
+#if APP_SMK
+        else if (k == B_FX && set.page == PG_ROLL && !(seq_rec && !seq_running))   /* the piano roll: deleted */
+            roll_delete();
+#endif
         else if (k == B_FX && seq_rec && !seq_running)   /* step entry: a rest, or with a key held a tie */
             seq_step_write((keys || OUTER_HELD()) && seq_key_note >= 0 ? (uint32_t)seq_key_note : 60u, 0,
                            (keys || OUTER_HELD()) && seq_key_note >= 0 ? SF_TIE : 0u);
@@ -1830,7 +1933,7 @@ static void input(void)
         post(Q_ARP, arp_posted, 0);
     }
 #if APP_SMK
-    if (pf.on && !sv.on) {                   /* the panel: K1 (raw), K2..K4 (SELECT, ALGO, PRESET), K5..K8 */
+    if (pf.on && !sv.on && set.page != PG_ROLL) {   /* the panel: K1 (raw), K2..K4 (SELECT, ALGO, PRESET), K5..K8 */
         if ((e = plat_smk_k1()) != 0)
             pf_knob(0, e);
         for (k = 0; k < NE; k++)
@@ -1843,11 +1946,17 @@ static void input(void)
     for (k = 0; k < NE; k++) {
         char t[16];
 #if APP_SMK
-        if (pf.on && !sv.on)
+        if (pf.on && !sv.on && set.page != PG_ROLL)
             break;
 #endif
         if ((e = plat_enc((int)k)) == 0)
             continue;
+#if APP_SMK
+        if (set.page == PG_ROLL && !sv.on && k >= EN_K1) {   /* the piano roll: K5..K8 edit the step picked */
+            roll_knob(k - EN_K1, e);
+            continue;
+        }
+#endif
         ui.redraw = 1;
         if (k == EN_SELECT) {
             page_show((set.page + NPAGE + (uint32_t)(e > 0 ? 1 : NPAGE - 1)) % NPAGE);
@@ -2086,9 +2195,31 @@ static void draw(void)
         const seqpat_t *pt = seq_pat();
         uint32_t L = seq_len(pt), win = roll_window(), lo = 127, hi = 0, st, nrow, rh;
         uint32_t cur = seq_running ? seq_cur_now : 0xFFu, pick = seq_rec && !seq_running ? seq_edit % NSTEP : roll_pick;
-        int32_t gy = 14, gh = 120, gx = 24, cw = 13, pitch;
+        int32_t gy = 16, gh = 78, gx = 26, cw = 13, pitch, lab_y = -99;
         char o[8];
-        cv_text(8, 0, &FONT_XS, "PIANO ROLL", C_ACCENT);
+        if (pick < NSTEP) {                  /* the step picked: its number, note, velocity */
+            int32_t x;
+            t[0] = 0;
+            text_cat(t, "STEP ");
+            int_text((int32_t)pick + 1, o);
+            text_cat(t, o);
+            x = cv_text(4, 0, &FONT_XS, t, C_ACCENT);
+            if (pick >= L || (!pt->vel[pick] && !(pt->flag[pick] & SF_TIE)))
+                cv_text(x + 6, 0, &FONT_XS, "REST", C_GRAY);
+            else if (pt->flag[pick] & SF_TIE)
+                cv_text(x + 6, 0, &FONT_XS, "TIE", C_WHITE);
+            else {
+                note_name(pt->note[pick], t);
+                x = cv_text(x + 6, 0, &FONT_XS, t, C_WHITE);
+                t[0] = 0;
+                text_cat(t, "VEL ");
+                int_text(pt->vel[pick], o);
+                text_cat(t, o);
+                cv_text(x + 6, 0, &FONT_XS, t, C_GRAY);
+            }
+        } else {
+            cv_text(4, 0, &FONT_XS, "PIANO ROLL", C_ACCENT);
+        }
         t[0] = 0;
         text_cat(t, "PAT ");
         int_text((int32_t)set.g[G_SPAT - NP] % (int32_t)NPAT + 1, o);
@@ -2121,14 +2252,25 @@ static void draw(void)
         if (rh < 2u)
             rh = 2u;
         gy += (gh - (int32_t)(rh * nrow)) / 2;
-        for (pitch = (int32_t)lo; pitch <= (int32_t)hi; pitch++)   /* the C's: a line and a name */
-            if (pitch % 12 == 0) {
-                int32_t y = gy + (int32_t)((hi - (uint32_t)pitch) * rh);
-                cv_rect(gx, y + (int32_t)rh - 1, cw * 16, 1, C_LINE);
-                o[0] = 'C';
-                int_text(pitch / 12 - 1, o + 1);
-                cv_text(2, y + (int32_t)rh - 10, &FONT_XS, o, C_DIM);
+        {   /* the names at the left: each note the 16 steps play (white), and the C's (a line, grey) */
+            uint32_t used[4] = {0, 0, 0, 0};
+            for (i = 0; i < 16u; i++) {
+                st = win * 16u + i;
+                if (st < L && pt->vel[st] && !(pt->flag[st] & SF_TIE))
+                    used[pt->note[st] >> 5] |= 1u << (pt->note[st] & 31u);
             }
+            for (pitch = (int32_t)hi; pitch >= (int32_t)lo; pitch--) {
+                int32_t y = gy + (int32_t)((hi - (uint32_t)pitch) * rh);
+                uint32_t u = (used[pitch >> 5] >> (pitch & 31)) & 1u;
+                if (pitch % 12 == 0)
+                    cv_rect(gx, y + (int32_t)rh - 1, cw * 16, 1, C_LINE);
+                if (pitch % 12 == 0 && y + (int32_t)rh / 2 - 4 >= lab_y + 9) {   /* (no two on top of each other) */
+                    note_name(pitch, o);
+                    lab_y = y + (int32_t)rh / 2 - 4;
+                    cv_text(1, lab_y, &FONT_XS, o, u ? C_WHITE : C_DIM);
+                }
+            }
+        }
         pitch = -1;                          /* (a tie at the window's start: the note before it) */
         for (st = 0; st < win * 16u && st < L; st++)
             if (pt->vel[st] && !(pt->flag[st] & SF_TIE))
@@ -2159,6 +2301,23 @@ static void draw(void)
                 pitch = -1;
             }
         }
+        for (i = 0; i < 16u; i++) {          /* under each step its note's name, in two rows (room for each) */
+            int32_t cx = gx + (int32_t)i * cw + cw / 2, y = gy + gh + 4 + (int32_t)(i & 1u) * 10;
+            uint16_t c = C_GRAY;
+            st = win * 16u + i;
+            if (st >= L)
+                continue;
+            if (pt->flag[st] & SF_TIE)
+                o[0] = '~', o[1] = 0, c = C_DIM;
+            else if (!pt->vel[st])
+                o[0] = '-', o[1] = 0, c = C_DIM;
+            else
+                note_name(pt->note[st], o);
+            if (st == pick || st == cur)
+                c = C_WHITE;
+            cv_text(cx - text_w(&FONT_XS, o) / 2, y, &FONT_XS, o, c);
+        }
+        cv_text(4, 124, &FONT_XS, "K5 NOTE  K6 VEL  K7 STEP  K8 TYPE  FX DEL", C_DIM);
         blit_poll(0, 36);
         goto foot;
     }
