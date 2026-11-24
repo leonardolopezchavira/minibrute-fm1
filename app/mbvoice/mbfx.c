@@ -239,7 +239,7 @@ void mbfx_process(MBFx *f, const float *in, float *outL, float *outR, int n)
     f->alive = 0.0f;
     if (!d_on && !r_on && !f->r_run)
         return;
-    f->r_scale += 0.1f * (k - f->r_scale);   /* (a size turned: eased, block by block) */
+    f->r_scale += 0.0513f * (k - f->r_scale);   /* (a size turned: eased, block by block: 0.1 a 256-frame block before) */
     k = f->r_scale;
     {   /* the tank's LFO (1 Hz, a sine and a cosine by rotation), its length kept at 1 each block */
         float g = 1.5f - 0.5f * (f->r_lc * f->r_lc + f->r_ls * f->r_ls);

@@ -128,7 +128,7 @@ both at -3 dB (an equal-power crossfade, as the plugin's). Matched to the plugin
 
 They run on the FM-1's second core while the first plays the voice (the screen's foot shows **2C**). On a unit whose
 second core is unreliable (some are), MB-1 notices, gives it up until power-off, and runs them on the first (**1C**):
-the same sound, with less headroom. Only the effects are a block (6 ms) behind the voice; the dry sound is not.
+the same sound, with less headroom. Only the effects are a block (3 ms) behind the voice; the dry sound is not.
 
 **Distortion, chorus, compressor**, in the sound itself: the distortion first, then the chorus, then the delay and
 reverb (FX ORDER), the compressor last.

@@ -8,7 +8,8 @@
 #define APP_SPLASH_RGB RGB(240, 96, 40)
 #define APP_SPLASH                       /* the start-up screen: app/splash (app.c app_splash) */
 void app_splash(void);
-#define APP_BLOCK 256u                   /* frames per audio block: 5.8 ms at 44.1 kHz */
+#define APP_BLOCK 128u                   /* frames per audio block: 2.9 ms at 44.1 kHz (0.18.4; 256 before: a key
+                                         * heard about 6 ms sooner) */
 #define APP_TOUCH                        /* velocity and pressure from the keys (lib/touch.h) */
 #define APP_SYSEX                        /* patches over USB SysEx (app.c: the loader) */
 int app_sysex(const uint8_t *p, uint32_t n);

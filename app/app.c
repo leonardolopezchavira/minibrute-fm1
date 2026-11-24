@@ -143,7 +143,7 @@ static void params_from(const uint8_t *v, MBParams *p)
 /* ----------------------------------------------------------------- engine --- */
 static MBVoice voice;
 /* the effects: a block behind the voice, on the second core while the first renders the next block (or after it,
- * on one core); the dry signal goes out at once, so only the effects are a block (5.8 ms) later */
+ * on one core); the dry signal goes out at once, so only the effects are a block (2.9 ms) later */
 static MBFx fx;
 static int16_t fx_mem[MBFX_MEM] PLAT_POOL;
 static float out_peak;
@@ -2026,6 +2026,14 @@ static void ctl_draw(uint32_t p, uint32_t v, int32_t cx, int32_t cy, int lit)
 
 static uint32_t cpu_peak;
 
+/* a part of the screen out, then the keys and knobs read again: a redraw (a few ms) no longer holds a note back */
+static void input(void);
+static void blit_poll(int32_t x, int32_t y)
+{
+    cv_blit(x, y);
+    input();
+}
+
 static void draw(void)
 {
     int short_foot = 0;
@@ -2051,7 +2059,7 @@ static void draw(void)
             cv_text(232 - text_w(&FONT_B, t), 6, &FONT_B, t, C_ACCENT);
         }
     }
-    cv_blit(0, 0);
+    blit_poll(0, 0);
     /* the page: its title, and its four parameters (K1..K4), lit a moment after a turn */
     cv_begin(240, 136, C_BLACK);
     if (sv.on) {                             /* saving: the name (K1, K2), where (PRESET), and how */
@@ -2070,7 +2078,7 @@ static void draw(void)
         cv_text(8, 72, &FONT_M, t, C_ACCENT);
         cv_text(8, 108, &FONT_XS, "PRESET: SLOT  SAVE: STORE", C_GRAY);
         cv_text(8, 122, &FONT_XS, "OTHER BUTTON: CANCEL", C_DIM);
-        cv_blit(0, 36);
+        blit_poll(0, 36);
         goto foot;
     }
 #if APP_SMK
@@ -2151,7 +2159,7 @@ static void draw(void)
                 pitch = -1;
             }
         }
-        cv_blit(0, 36);
+        blit_poll(0, 36);
         goto foot;
     }
     if (pf.on && PAGE[set.page].btn != B_SEQ) {   /* the SMK-37's panel: the eight knobs, the four faders (the foot
@@ -2179,7 +2187,7 @@ static void draw(void)
             ctl_draw(p, v, cx, cy, lit);
             cv_text(cx - text_w(&FONT_XS, PK_NAME[i]) / 2, cy + 20, &FONT_XS, PK_NAME[i], lit ? C_WHITE : C_GRAY);
         }
-        cv_blit(0, 36);
+        blit_poll(0, 36);
         cv_begin(240, 42, C_BLACK);
         for (i = 0; i < 4u; i++) {           /* the faders: a slot, the cap at the value (grey until caught) */
             uint32_t p = PF[pf.bank][i], v = pget(p), max = pmax(p);
@@ -2194,7 +2202,7 @@ static void draw(void)
             value_text(p, v, t);
             cv_text(x + 15, top + 14, &FONT_XS, t, lit ? C_WHITE : C_HI);
         }
-        cv_blit(0, 160);
+        blit_poll(0, 160);
         goto foot;
     }
 #endif
@@ -2243,7 +2251,7 @@ static void draw(void)
             cv_text(x + 44, y + 24, f, t, lit ? C_WHITE : C_HI);
         }
     }
-    cv_blit(0, 36);
+    blit_poll(0, 36);
 foot:
     /* the foot: the wheel, the pressure, the octave, and the scope */
     cv_begin(240, short_foot ? 38 : 64, C_BLACK);
