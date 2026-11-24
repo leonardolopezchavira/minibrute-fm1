@@ -2192,10 +2192,14 @@ static void draw(void)
     }
 #if APP_SMK
     if (set.page == PG_ROLL) {               /* the piano roll: 16 steps of the pattern, the pitch upwards */
+        /* the rows as a keyboard's: a white key's row grey, a black key's dark, a line where two white keys meet
+         * (E-F, B-C), the keys drawn at the left and each C named; the step playing marked above, the step picked
+         * framed */
         const seqpat_t *pt = seq_pat();
         uint32_t L = seq_len(pt), win = roll_window(), lo = 127, hi = 0, st, nrow, rh;
         uint32_t cur = seq_running ? seq_cur_now : 0xFFu, pick = seq_rec && !seq_running ? seq_edit % NSTEP : roll_pick;
-        int32_t gy = 16, gh = 78, gx = 26, cw = 13, pitch, lab_y = -99;
+        static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
+        int32_t gy = 18, gh = 100, gx = 34, cw = 12, pitch;
         char o[8];
         if (pick < NSTEP) {                  /* the step picked: its number, note, velocity */
             int32_t x;
@@ -2233,44 +2237,38 @@ static void draw(void)
         text_cat(t, "/");
         int_text((int32_t)L, o);
         text_cat(t, o);
-        cv_text(232 - text_w(&FONT_XS, t), 0, &FONT_XS, t, C_GRAY);
-        for (st = 0; st < L; st++)           /* the range: the pattern's notes, an octave at least */
+        cv_text(236 - text_w(&FONT_XS, t), 0, &FONT_XS, t, C_GRAY);
+        for (st = 0; st < L; st++)           /* the range: the pattern's notes, an octave at least, C to C */
             if (pt->vel[st] && !(pt->flag[st] & SF_TIE)) {
                 lo = pt->note[st] < lo ? pt->note[st] : lo;
                 hi = pt->note[st] > hi ? pt->note[st] : hi;
             }
         if (lo > hi)
             lo = 60, hi = 60;
-        while (hi - lo < 12u) {
-            if (hi < 127u)
-                hi++;
-            if (hi - lo < 12u && lo > 0u)
-                lo--;
-        }
+        lo -= lo % 12u;                      /* (from a C up to the C above the highest) */
+        hi = hi - hi % 12u + 12u;
+        if (hi > 127u)
+            hi = 127u;
         nrow = hi - lo + 1u;
         rh = (uint32_t)gh / nrow;
         if (rh < 2u)
             rh = 2u;
         gy += (gh - (int32_t)(rh * nrow)) / 2;
-        {   /* the names at the left: each note the 16 steps play (white), and the C's (a line, grey) */
-            uint32_t used[4] = {0, 0, 0, 0};
-            for (i = 0; i < 16u; i++) {
-                st = win * 16u + i;
-                if (st < L && pt->vel[st] && !(pt->flag[st] & SF_TIE))
-                    used[pt->note[st] >> 5] |= 1u << (pt->note[st] & 31u);
-            }
-            for (pitch = (int32_t)hi; pitch >= (int32_t)lo; pitch--) {
-                int32_t y = gy + (int32_t)((hi - (uint32_t)pitch) * rh);
-                uint32_t u = (used[pitch >> 5] >> (pitch & 31)) & 1u;
-                if (pitch % 12 == 0)
-                    cv_rect(gx, y + (int32_t)rh - 1, cw * 16, 1, C_LINE);
-                if (pitch % 12 == 0 && y + (int32_t)rh / 2 - 4 >= lab_y + 9) {   /* (no two on top of each other) */
-                    note_name(pitch, o);
-                    lab_y = y + (int32_t)rh / 2 - 4;
-                    cv_text(1, lab_y, &FONT_XS, o, u ? C_WHITE : C_DIM);
-                }
+        for (pitch = (int32_t)hi; pitch >= (int32_t)lo; pitch--) {   /* the rows, and the keys at the left */
+            int32_t y = gy + (int32_t)((hi - (uint32_t)pitch) * rh), blk = BLACK[pitch % 12];
+            cv_rect(gx, y, cw * 16, (int32_t)rh, blk ? C_BLACK : C_LINE);
+            cv_rect(gx - 12, y, 11, (int32_t)rh, C_GRAY);   /* (a white key the whole height) */
+            if (blk)
+                cv_rect(gx - 12, y, 7, (int32_t)rh, C_BLACK);
+            if (pitch % 12 == 0 || pitch % 12 == 5)   /* (where two white keys meet: a line under F and C) */
+                cv_rect(gx - 12, y + (int32_t)rh - 1, 11 + cw * 16, 1, C_BLACK);
+            if (pitch % 12 == 0) {           /* the C's named */
+                note_name(pitch, o);
+                cv_text(1, y + (int32_t)rh / 2 - 5, &FONT_XS, o, C_GRAY);
             }
         }
+        for (i = 0; i <= 16u; i += 4u)       /* the beats */
+            cv_rect(gx + (int32_t)i * cw - 1, gy, 1, (int32_t)(rh * nrow), C_BLACK);
         pitch = -1;                          /* (a tie at the window's start: the note before it) */
         for (st = 0; st < win * 16u && st < L; st++)
             if (pt->vel[st] && !(pt->flag[st] & SF_TIE))
@@ -2280,18 +2278,20 @@ static void draw(void)
         for (i = 0; i < 16u; i++) {
             int32_t x = gx + (int32_t)i * cw;
             st = win * 16u + i;
-            if (st >= L)                     /* past the pattern's end: nothing */
+            if (st >= L) {                   /* past the pattern's end: dark */
+                cv_rect(x, gy, cw, (int32_t)(rh * nrow), C_BLACK);
                 continue;
-            if (st == cur)
-                cv_rect(x, gy, cw - 1, (int32_t)(rh * nrow), C_LINE);
-            if (st == pick) {                /* the step picked: a frame */
-                cv_rect(x, gy - 2, cw - 1, 2, C_WHITE);
-                cv_rect(x, gy + (int32_t)(rh * nrow), cw - 1, 2, C_WHITE);
             }
-            if (i % 4u == 0u)
-                cv_rect(x, gy, 1, (int32_t)(rh * nrow), C_LINE);
+            if (st == cur)                   /* the step playing: a mark above */
+                cv_rect(x + 1, gy - 4, cw - 2, 3, C_ACCENT);
+            if (st == pick) {                /* the step picked: a frame */
+                cv_rect(x, gy - 4, cw, 1, C_WHITE);
+                cv_rect(x, gy + (int32_t)(rh * nrow) + 2, cw, 2, C_WHITE);
+                cv_rect(x, gy - 4, 1, (int32_t)(rh * nrow) + 8, C_WHITE);
+                cv_rect(x + cw - 1, gy - 4, 1, (int32_t)(rh * nrow) + 8, C_WHITE);
+            }
             if (pt->flag[st] & SF_TIE) {     /* a tie: the note before, carried on */
-                if (pitch >= 0)
+                if (pitch >= 0 && (uint32_t)pitch >= lo && (uint32_t)pitch <= hi)
                     cv_rect(x - 1, gy + (int32_t)((hi - (uint32_t)pitch) * rh), cw, (int32_t)rh, st == cur ? C_WHITE : C_HI);
             } else if (pt->vel[st]) {
                 pitch = pt->note[st];
@@ -2300,22 +2300,6 @@ static void draw(void)
             } else {
                 pitch = -1;
             }
-        }
-        for (i = 0; i < 16u; i++) {          /* under each step its note's name, in two rows (room for each) */
-            int32_t cx = gx + (int32_t)i * cw + cw / 2, y = gy + gh + 4 + (int32_t)(i & 1u) * 10;
-            uint16_t c = C_GRAY;
-            st = win * 16u + i;
-            if (st >= L)
-                continue;
-            if (pt->flag[st] & SF_TIE)
-                o[0] = '~', o[1] = 0, c = C_DIM;
-            else if (!pt->vel[st])
-                o[0] = '-', o[1] = 0, c = C_DIM;
-            else
-                note_name(pt->note[st], o);
-            if (st == pick || st == cur)
-                c = C_WHITE;
-            cv_text(cx - text_w(&FONT_XS, o) / 2, y, &FONT_XS, o, c);
         }
         cv_text(4, 124, &FONT_XS, "K5 NOTE  K6 VEL  K7 STEP  K8 TYPE  FX DEL", C_DIM);
         blit_poll(0, 36);
