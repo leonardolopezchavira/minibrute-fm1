@@ -19,6 +19,12 @@
 #include "mb_tapers.h"
 
 #define C_ACCENT RGB(240, 96, 40)       /* the highlight: Minibrute orange */
+#if defined(BOARD_SMK37) && BOARD_SMK37
+#define APP_SMK 1                       /* the M-Vave SMK-37 (fm1-base BOARD=smk37): its keys' own velocity, the
+                                         * wheels, the pedal and the outer keys (smk_input); the rest as on the FM-1 */
+#else
+#define APP_SMK 0
+#endif
 
 
 #include "mbpatch.h"
@@ -147,7 +153,7 @@ static MBFxParams fxpar[2];               /* the effects' (posted with par[]) */
 static float fxbeats[2];                  /* the delay on the clock: its length in beats (0: free) */
 
 /* the main loop's events for the audio interrupt: one writer (the main loop), one reader (app_render) */
-enum { Q_ON, Q_OFF, Q_PAR, Q_WHEEL, Q_AT, Q_ALLOFF, Q_ARP, Q_SEQ };
+enum { Q_ON, Q_OFF, Q_PAR, Q_WHEEL, Q_AT, Q_ALLOFF, Q_ARP, Q_SEQ, Q_BEND, Q_SUS };
 #define NEV 64u
 static volatile uint32_t ev_q[NEV];
 static volatile uint32_t ev_w, ev_r;
@@ -164,6 +170,7 @@ static volatile int32_t voice_note = -1;     /* the note sounding, for the scree
 static volatile uint8_t wheel_now, at_now;   /* 0..127, for the screen (from the panel or MIDI) */
 static volatile uint8_t cc_req[NP];          /* a parameter MIDI changed: value | 0x80, for the main loop */
 static volatile uint32_t midi_count;
+static volatile int16_t bend_now;            /* the panel's bend (the SMK-37's wheel), -8192..8191 */
 static volatile uint8_t bend_range = 2;     /* semitones (the patch's BEND) */
 
 /* --------------------------------------------------------- the arpeggiator --- */
@@ -419,7 +426,37 @@ static void seq_record(uint32_t note, uint32_t vel)   /* REC while it plays: a k
     seq_wrote = 1;
 }
 
+/* the sustain pedal (CC 64, and the SMK-37's jack): while it is down a key let go keeps sounding, as if held; let go,
+ * the notes no longer held are released (the voice's note stack keeps last-note priority) */
+static uint8_t sus_on;
+static uint32_t sus_held[4];                 /* notes let go while the pedal was down: bit per MIDI note */
+static void note_play(uint32_t note, uint32_t vel);
 static void note_in(uint32_t note, uint32_t vel)   /* audio interrupt: a key or a MIDI note (vel 0: up) */
+{
+    note &= 127u;
+    if (vel)
+        sus_held[note >> 5] &= ~(1u << (note & 31u));
+    else if (sus_on) {
+        sus_held[note >> 5] |= 1u << (note & 31u);
+        return;
+    }
+    note_play(note, vel);
+}
+
+static void sustain(uint32_t on)             /* audio interrupt */
+{
+    uint32_t n;
+    sus_on = (uint8_t)(on != 0u);
+    if (on)
+        return;
+    for (n = 0; n < 128u; n++)
+        if (sus_held[n >> 5] & (1u << (n & 31u))) {
+            sus_held[n >> 5] &= ~(1u << (n & 31u));
+            note_play(n, 0);
+        }
+}
+
+static void note_play(uint32_t note, uint32_t vel)
 {
     if (seq.run && seq_rec)
         seq_record(note, vel);
@@ -474,7 +511,16 @@ static void events(void)                     /* audio interrupt */
         case Q_AT:
             mb_set_aftertouch(&voice, (float)a * (1.0f / 127.0f));
             break;
+        case Q_BEND:                         /* b: the 14-bit bend */
+            bend_now = (int16_t)((int32_t)b - 8192);
+            mb_set_bend(&voice, (float)((int32_t)b - 8192) * (float)bend_range * (1.0f / 8192.0f));
+            break;
+        case Q_SUS:
+            sustain(a);
+            break;
         case Q_ALLOFF:
+            sus_on = 0;
+            sus_held[0] = sus_held[1] = sus_held[2] = sus_held[3] = 0;
             arp_stop();
             seq.sounding = -1;
             mb_all_off(&voice);
@@ -545,7 +591,11 @@ static void midi_in(void)                    /* audio interrupt */
             if (d1 == 1u) {
                 mb_set_wheel(&voice, (float)d2 * (1.0f / 127.0f));
                 wheel_now = (uint8_t)d2;
+            } else if (d1 == 64u) {
+                sustain(d2 >= 64u);
             } else if (d1 == 120u || d1 == 123u) {
+                sus_on = 0;
+                sus_held[0] = sus_held[1] = sus_held[2] = sus_held[3] = 0;
                 arp_stop();
                 mb_all_off(&voice);
                 voice_note = -1;
@@ -1299,17 +1349,88 @@ static void play_button(uint32_t btn)
     }
 }
 
+#if APP_SMK
+/* ------------------------------------------------------------------ SMK-37 --- */
+/* The SMK-37's own (fm1-base BOARD=smk37; after SQ-80's): the pitch wheel bends (the patch's BEND range), the mod
+ * wheel is the mod wheel (as ALGO), the pedal sustains, and the keys outside the FM-1's 27 (C3..E3, G#5..C6) play too,
+ * each with its velocity, and go out over USB and Bluetooth as the others do. The buttons, the knobs (K1 = MASTER,
+ * K2 SELECT, K3 ALGO, K4 PRESET, K5..K8 the page's four) and the pads (the white keys) are the platform's, as on the
+ * FM-1 */
+static struct {
+    int8_t pedal;                            /* the pedal's last state (-1: none) */
+    uint8_t outer[SMK_NKEYBED];              /* an outer key's note + 1 while it sounds (0: none) */
+} smk = {-1, {0}};
+
+static void smk_note(uint32_t note, uint32_t vel)
+{
+    post(vel ? Q_ON : Q_OFF, note, vel);
+    plat_midi_send(vel ? 0x09u | 0x90u << 8 | note << 16 | vel << 24 : 0x08u | 0x80u << 8 | note << 16, TO_USB | TO_BLE);
+}
+
+static void smk_input(void)
+{
+    int32_t k, bend, mod;
+    int ped;
+    if (plat_wheels(&bend, &mod)) {
+        uint32_t b14 = (uint32_t)(bend + 8192);
+        post(Q_BEND, 0, b14);
+        plat_midi_send(0x0Eu | 0xE0u << 8 | (b14 & 127u) << 16 | (b14 >> 7) << 24, TO_USB | TO_BLE);
+        if ((uint32_t)mod != ui.wheel) {     /* the mod wheel: as ALGO */
+            ui.wheel = (uint8_t)mod;
+            wheel_now = (uint8_t)mod;
+            post(Q_WHEEL, (uint32_t)mod, 0);
+            plat_midi_send(0x0Bu | 0xB0u << 8 | 1u << 16 | (uint32_t)mod << 24, TO_USB | TO_BLE);
+            ui.redraw = 1;
+        }
+    }
+    if ((ped = plat_pedal()) != smk.pedal) {
+        if (ped >= 0 || smk.pedal > 0) {     /* (unplugged while held: let go) */
+            uint32_t v = ped > 0 ? 127u : 0u;
+            post(Q_SUS, v ? 1u : 0u, 0);
+            plat_midi_send(0x0Bu | 0xB0u << 8 | 64u << 16 | v << 24, TO_USB | TO_BLE);
+        }
+        smk.pedal = (int8_t)ped;
+    }
+    while ((k = plat_outer_key()) >= 0) {    /* C3..E3, G#5..C6 */
+        uint32_t key = (uint32_t)k >> 8, v = (uint32_t)k & 127u;
+        if (key >= SMK_NKEYBED)
+            continue;
+        if (v) {
+            int32_t note = 48 + (int32_t)key + 12 * set.octave;
+            if (note < 0 || note > 127)
+                continue;
+            if (smk.outer[key])
+                smk_note(smk.outer[key] - 1u, 0);
+            smk.outer[key] = (uint8_t)(note + 1);
+            smk_note((uint32_t)note, v);
+        } else if (smk.outer[key]) {
+            smk_note(smk.outer[key] - 1u, 0);
+            smk.outer[key] = 0;
+        }
+    }
+}
+#endif
+
 static void input(void)
 {
     uint32_t keys, btn = plat_buttons(), k, at = 0;
     int32_t e;
     touch_poll();
+#if APP_SMK
+    smk_input();
+#endif
     keys = touch_keys();
     for (k = 0; k < NKEYS; k++) {            /* key 0 is F3 (MIDI 53) */
         uint32_t bit = 1u << k, v;
         int32_t note = 53 + (int32_t)k + 12 * set.octave;
         if ((keys & bit) && !(ui.keys & bit)) {
+#if APP_SMK
+            v = (uint32_t)plat_key_vel((int)k);   /* (the SMK-37's keys give it themselves) */
+            if (v > 127u)
+                v = 127u;
+#else
             v = touch_vel(k);
+#endif
             ui.vel[k] = (uint8_t)v;
             if (seq_rec && !seq_running) {   /* step entry: the key's note */
                 seq_step_write((uint32_t)note, v ? v : 1u, 0);
@@ -1679,7 +1800,7 @@ static void draw(void)
         if (p == P_NONE)
             continue;
         v = pget(p);
-        k[1] = (char)('1' + i);
+        k[1] = (char)((APP_SMK ? '5' : '1') + i);   /* (the SMK-37's KNOB 1..4 are its K5..K8) */
         cv_rect(x, y, 114, 54, lit ? C_LINE : C_BLACK);
         if (lit)                             /* (the control's own ground, so its slot shows) */
             cv_rect(x + 2, y + 13, 38, 40, C_BLACK);
@@ -1815,6 +1936,10 @@ int app_expect(const char *what, int *got)
 {
     if (!strcmp(what, "note"))
         *got = voice_note;
+    else if (!strcmp(what, "sustain"))
+        *got = sus_on ? 127 : 0;
+    else if (!strcmp(what, "bend"))
+        *got = bend_now / 41;
     else if (!strcmp(what, "slot"))
         *got = set.slot;
     else if (!strcmp(what, "page"))

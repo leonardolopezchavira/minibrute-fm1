@@ -1,0 +1,77 @@
+# MB-1 on the SMK-37 in the host simulator: BOARD=smk37 python3 fm1/base/tools/build.py app --host, then
+#   app/build/host/mb1-smk37_host app/tests/smk37.txt app/build/host
+# the factory bank, the store in the SMK's window (a save, a power cycle), the keys' velocity, the wheels, the pedal
+# (sustain), the outer keys, and the buttons and knobs by their FM-1 meaning
+wait 600
+shot smk_boot.png
+expect slot 0
+expect p0 115
+# the middle keys with their velocity: A01 HALCYON's arpeggiator off first (ARP: ON -> HOLD -> OFF)
+tap ARP
+wait 30
+tap ARP
+wait 30
+key 7 down 40
+wait 200
+expect note 60
+key 7 up
+wait 1500
+expect note -1
+# the wheels
+bend 8191
+wait 30
+expect bend 199
+bend 0
+wait 30
+expect bend 0
+modw 100
+wait 30
+expect wheel 100
+modw 0
+wait 30
+expect wheel 0
+# the pedal: a key let go keeps sounding while it is down
+pedal down
+wait 30
+expect sustain 127
+key 7 down 100
+wait 100
+key 7 up
+wait 1500
+expect note 60
+pedal up
+wait 30
+expect sustain 0
+wait 1500
+expect note -1
+# the outer keys: C3 (keybed key 0) and C6 (36)
+outer 0 down 90
+wait 100
+expect note 48
+outer 0 up
+wait 1500
+outer 36 down 90
+wait 100
+expect note 84
+outer 36 up
+wait 1500
+expect note -1
+# a knob edit, SAVE SAVE into A01, then a power cycle: the store in the SMK's window
+tap HOME
+wait 30
+expect page 0
+turn K1 -5
+wait 30
+expect edited 1
+expect p0 110
+tap SAVE
+wait 30
+tap SAVE
+wait 300
+expect edited 0
+power
+wait 600
+expect slot 0
+expect edited 0
+expect p0 110
+shot smk_after.png

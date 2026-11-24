@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT
+     MB-1 for the M-Vave SMK-37 (and the Donner Starrykey 37 Play): what it is, the install, the controls. The firmware
+     workflow puts the three packages and their installers next to it (tools/make_smk_install.py); tools/site_theme.py
+     gives it the site's look and menu. {{VERSION}}: app/VERSION. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMK-37 · MB-1</title>
+<style>
+  main { max-width: 820px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 40px; margin: 0 0 4px;
+    letter-spacing: .02em; text-transform: uppercase; }
+  .lede { margin: 0 0 22px; color: var(--mb-mute, #555); }
+  section { background: var(--mb-face, #fff); border-radius: 4px; padding: 26px 22px 14px; margin: 26px 0 0; position: relative; }
+  section > h2 { position: absolute; top: -13px; left: 14px; margin: 0; padding: 3px 12px 2px; background: var(--mb-ink, #000);
+    color: var(--mb-face, #fff); font: 700 15px "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: .1em;
+    text-transform: uppercase; border-radius: 2px; }
+  section.warn > h2 { background: var(--mb-hi, #f06028); color: #fff; }
+  p, ol, ul { margin: 0 0 12px; }
+  li { margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 7px 4px; border-top: 1px solid var(--mb-line, #ccc); vertical-align: top; }
+  td:first-child { width: 10em; font-weight: 700; font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+    text-transform: uppercase; letter-spacing: .03em; }
+  .dl { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 12px; }
+  .dl a { background: var(--mb-hi, #f06028); color: #fff; text-decoration: none; font: 700 15px "Barlow Condensed", "Arial Narrow", sans-serif;
+    letter-spacing: .08em; text-transform: uppercase; padding: 9px 16px; border-radius: 3px; }
+  .dl a.alt { background: transparent; color: var(--mb-ink, #000); box-shadow: inset 0 0 0 2px var(--mb-ink, #000); }
+  .small { font-size: 14px; color: var(--mb-mute, #555); }
+</style>
+</head>
+<body>
+<main>
+  <h1>MB-1 on the SMK-37</h1>
+  <p class="lede">For the M-Vave SMK-37 Pro and the Donner Starrykey 37 Play (the same keyboard), with builds for the
+  SMK-37 Elite and the MKE-P37. Version {{VERSION}}.</p>
+
+  <section class="warn">
+    <h2>Preview</h2>
+    <p>This is MB-1 brought up on the keyboard: the FM-1's MB-1, with the SMK-37's keys, wheels and pedal. Its own
+    panel (the faders as the oscillator mixer, eight knobs for the Brute controls, the pads) comes next. It has not been
+    tried on a keyboard yet: the SMK-37 Elite and MKE-P37 builds may never be.</p>
+  </section>
+
+  <section>
+    <h2>Install</h2>
+    <p>Connect the keyboard by USB (switched on, as it is), open the installer for your model in Chrome or Edge and
+    press Install.</p>
+    <div class="dl">
+      <a href="install/">SMK-37 Pro / Starrykey 37 Play</a>
+      <a class="alt" href="install-elite/">SMK-37 Elite</a>
+      <a class="alt" href="install-mke/">MKE-P37</a>
+    </div>
+    <p>MB-1 keeps its patches and settings in the keyboard's own store (16 of its sectors); it never writes the
+    keyboard's calibration, its Bluetooth data or its stock presets. Back to M-Vave's firmware: install it with
+    M-Vave's updater, as for any update.</p>
+    <p id="backup" class="small">A full backup of the keyboard's flash first is optional; it is the same keyboard as
+    SQ-80's, so its steps (Windows, about ten minutes, once) are on
+    <a href="https://leonardolopezchavira.github.io/sq80-fm1/smk37/">SQ-80's SMK-37 page</a>.</p>
+  </section>
+
+  <section>
+    <h2>The controls</h2>
+    <table>
+      <tr><td>K1</td><td>Volume</td></tr>
+      <tr><td>K2 · K3 · K4</td><td>As the FM-1's SELECT (every page in turn) · ALGO (the mod wheel) · PRESET (the patch slot)</td></tr>
+      <tr><td>K5–K8</td><td>The page's four parameters: the screen names them K5–K8</td></tr>
+      <tr><td>Keys</td><td>All 37 play (C3–C6, OCTAVE − / + move them), with their velocity</td></tr>
+      <tr><td>Wheels · pedal</td><td>Pitch bend (the patch's BEND range) · the mod wheel · sustain</td></tr>
+      <tr><td>Pads</td><td>For now, the white keys of the FM-1's two octaves</td></tr>
+      <tr><td>Buttons</td><td>As on the FM-1: PATCH = HOME (three times: RANDOM), SCALE = SEL, CHORD = ENV,
+        NOTE REPEAT = LFO, PARA = EDIT, FX, GLOBE = GLO, BT = SAVE, ARP, SEQ, SEQ PLAY = PLAY, SEQ REC = REC</td></tr>
+    </table>
+    <p>The rest works as <a href="../manual/">the manual</a> says for the FM-1; the patches, the .syx files and the
+    <a href="../edit/">patch editor</a> are the same.</p>
+  </section>
+
+  <p class="small">The SMK-37 support builds on genkigenki's fm1-to-smk37 kit and SMK-37 layer (GPL-3.0), by way of
+  SQ-80's copy of fm1-base.</p>
+</main>
+</body>
+</html>

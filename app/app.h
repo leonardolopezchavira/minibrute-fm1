@@ -17,8 +17,14 @@ int app_sysex(const uint8_t *p, uint32_t n);
  * the 128 patch slots (four banks of 32, an object each: A in OBJ_BANK, as before 0.12) and the 8 sequences (in the
  * data area) */
 enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_BLE, OBJ_BANK, OBJ_SEQ, OBJ_BANK_B, OBJ_BANK_C, OBJ_BANK_D, OBJ_NOBJ };
+#if defined(BOARD_SMK37) && BOARD_SMK37
+/* the M-Vave SMK-37 (fm1-base BOARD=smk37): its store window is 0x9D000..0xBAFFF (plat.h); the eight objects in pairs
+ * from its start, 16 of its 30 sectors (0xFC000, 0xDC000 and 0xDE000 are the stock firmware's there) */
+#define APP_STORE_MAP {0x9D000u, 0x9F000u, 0xA1000u, 0xA3000u, 0xA5000u, 0xA7000u, 0xA9000u, 0xAB000u}
+#else
 #define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xDE000u, 0x97000u, 0x99000u, 0x9B000u, 0x9D000u, 0x9F000u}   /* (the data
                                          * area's sectors in pairs: bank A, the sequences, banks B, C, D) */
+#endif
 
 void app_init(void);
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12);
