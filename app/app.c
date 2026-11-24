@@ -2194,13 +2194,21 @@ static void draw(void)
     if (set.page == PG_ROLL) {               /* the piano roll: 16 steps of the pattern, the pitch upwards */
         /* the rows as a keyboard's: a white key's row grey, a black key's dark, a line where two white keys meet
          * (E-F, B-C), the keys drawn at the left and each C named; the step playing marked above, the step picked
-         * framed */
+         * framed. It takes the foot's room too (no meters here): drawn twice, the top 136 rows and the 68 below */
+      uint32_t pass;
+      for (pass = 0; pass < 2u; pass++) {
         const seqpat_t *pt = seq_pat();
         uint32_t L = seq_len(pt), win = roll_window(), lo = 127, hi = 0, st, nrow, rh;
         uint32_t cur = seq_running ? seq_cur_now : 0xFFu, pick = seq_rec && !seq_running ? seq_edit % NSTEP : roll_pick;
         static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-        int32_t gy = 18, gh = 100, gx = 34, cw = 12, pitch;
+        int32_t gy = 18, gh = 166, gx = 34, cw = 12, pitch;
         char o[8];
+        if (pass) {                          /* (the part below: the same drawing, 136 rows up) */
+            cv_begin(240, 68, C_BLACK);
+            cv_oy = -136;
+            cv_y0 = 0;
+            cv_y1 = 68;
+        }
         if (pick < NSTEP) {                  /* the step picked: its number, note, velocity */
             int32_t x;
             t[0] = 0;
@@ -2301,9 +2309,10 @@ static void draw(void)
                 pitch = -1;
             }
         }
-        cv_text(4, 124, &FONT_XS, "K5 NOTE  K6 VEL  K7 STEP  K8 TYPE  FX DEL", C_DIM);
-        blit_poll(0, 36);
-        goto foot;
+        cv_text(4, 192, &FONT_XS, "K5 NOTE  K6 VEL  K7 STEP  K8 TYPE  FX DEL", C_DIM);
+        blit_poll(0, pass ? 172u : 36u);
+      }
+        return;
     }
     if (pf.on && PAGE[set.page].btn != B_SEQ) {   /* the SMK-37's panel: the eight knobs, the four faders (the foot
                                               * without its scope, for room) */
