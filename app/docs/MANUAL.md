@@ -179,6 +179,12 @@ FM-1 that already has patches, they stay as they are, and the patch editor's **F
 were 32 slots: they are bank A now, as they were.) The
 patch editor (below) reads, edits and stores all of them, and keeps banks as .syx files.
 
+**Backing up.** The [backup page](../backup/) (on the SMK-37, its own: see [its page](../smk37/)) saves everything
+MB-1 keeps (the 128 patches, the 8 sequencer patterns and the settings) to a file on your computer, with the FM-1
+connected by USB in Chrome or Edge, and puts a file back: the FM-1 asks first (RESTORE FROM USB? SEL yes, HOME no;
+on the SMK-37 SCALE and PATCH), with the sequencer stopped. The patch editor (below) also reads and writes the
+patterns one by one.
+
 ## The knobs' range
 
 Every knob runs over the same range, with the same feel, as the MiniBrute V plugin's: the cutoff from 20 Hz to 20 kHz,
@@ -192,7 +198,10 @@ The site's [patch editor](../edit/) is a MiniBrute-style patch sheet that plays:
 panel, drawn like the paper sheets MiniBrute players fill in and share, in light or dark. It sounds in the browser with MB-1's own engine (the arpeggiator too, at the editor's
 tempo) and, with the FM-1 connected by USB (Chrome or Edge), on the FM-1 as you turn each control. It reads the
 FM-1's 128 slots (banks A..D) and the sound playing, stores a patch in a slot, writes a whole bank, opens and saves
-.syx files, and exports the sheet as SVG or PNG, or prints it.
+.syx files, and exports the sheet as SVG or PNG, or prints it. Its **Sequencer patterns** panel reads the 8 patterns
+(from the FM-1 or the SMK-37, MB-1 0.20 or later), shows each as a piano roll, copies one onto another, clears one,
+keeps them in a .syx (Save bank .syx keeps them with the patches) and writes them back, all or one: so a pattern moves
+between the FM-1 and the SMK-37 too.
 
 **Read a sheet** loads a patch from a picture of a patch sheet, in the browser (nothing is uploaded):
 
@@ -213,8 +222,9 @@ slots 0.12 or later. Every control on the sheet has its CC (below): a controller
 MB-1 takes patches over USB MIDI SysEx (`F0 7D 4D 42 ...`, app/app.c "the loader"): a patch into a slot (01; slots
 0..127 are A01..D32), the slots stored (02), bank A's factory patches back (03; banks B..D are left alone), a slot played (04), a slot's patch sent
 back (05), what is there (06: the parameter count, the banks of 32, the slot playing, edited or not), a patch played
-without a slot (07, as an edit: SAVE keeps it), and the sound playing sent back, edits included (08). Each frame is
-answered.
+without a slot (07, as an edit: SAVE keeps it), the sound playing sent back, edits included (08), a sequencer
+pattern sent back (09 PAT: its length, then the 64 steps' notes, velocities (0: a rest) and ties) and one written and
+stored (0A, the same layout). Each frame is answered.
 
 ## MIDI
 

@@ -91,6 +91,9 @@ try { const t = localStorage.getItem("mb1-theme"); document.documentElement.data
   .bank li button.cur .n { color: #000; }
   .bank .row { display: flex; flex-wrap: wrap; gap: 6px; }
   .note { font-size: 13px; color: var(--mute); margin: 8px 0 0; }
+  .pats { margin-top: 16px; }
+  #pattabs button.on { background: var(--hi); border-color: var(--hi); color: #000; }
+  #patroll { width: 100%; height: auto; display: block; background: #000; border-radius: 6px; }
   kbd { font: 600 12px "Barlow Condensed", sans-serif; border: 1px solid var(--mute); border-radius: 3px; padding: 0 4px; }
   @media print {
     body.ed { background: #fff; }
@@ -172,6 +175,22 @@ them in its slots (Chrome or Edge; MB-1 0.12 or later).</p>
     </div>
     <p class="note">128 slots in four banks, A01 to D32. Save to slot puts this patch in the slot picked here, and, connected, stores it on the FM-1.</p>
   </div>
+</div>
+<div class="bank pats">
+  <div class="t"><span>Sequencer patterns</span><span id="patst" class="status"></span></div>
+  <div id="pattabs" class="row" role="group" aria-label="Pattern" style="margin-bottom:6px"></div>
+  <canvas id="patroll" width="1120" height="260" aria-label="The pattern picked, as a piano roll"></canvas>
+  <p id="patinfo" class="note"></p>
+  <div class="row">
+    <button id="rdpat" disabled>Read FM-1</button>
+    <button id="wrpat" disabled>Write all to FM-1</button>
+    <button id="wrpat1" disabled>Write this one</button>
+    <label class="status" for="patto">copy to</label><select id="patto"></select><button id="patcopy">Copy</button>
+    <button id="patclear">Clear</button>
+    <label class="file">Open patterns<input id="openpat" type="file" accept=".syx,application/octet-stream"></label>
+    <button id="savepat">Save patterns .syx</button>
+  </div>
+  <p class="note">The sequencer's 8 patterns (MB-1 0.20 or later): read from the FM-1 or the SMK-37, copied one onto another, kept as a .syx (Save bank .syx keeps them with the patches), and sent back to either. A pattern written to the FM-1 is stored there at once.</p>
 </div>
 </main>
 
@@ -545,8 +564,10 @@ document.getElementById("open").addEventListener("change", async (e) => {
 });
 document.getElementById("openbank").addEventListener("change", async (e) => {
   const b = await readFile(e.target); if (!b) return;
-  const fr = frames(b); if (!fr.length) return say("no MB-1 patches in that file", true);
-  putBank(fr); say(`${fr.length} patches: in the slots list (not on the FM-1 until you write them)`);
+  const fr = frames(b), pf = patFrames(b); if (!fr.length && !pf.length) return say("no MB-1 patches in that file", true);
+  if (fr.length) putBank(fr);
+  pf.forEach((f) => { pats[f.pat] = f.p; }); if (pf.length) drawPats();
+  say(`${fr.length} patches${pf.length ? `, ${pf.length} patterns` : ""}: here (not on the FM-1 until you write them)`);
 });
 function putBank(fr) {
   fr.forEach((f, k) => { const s = f.slot >= 0 && f.slot < NSLOT ? f.slot : k; if (s < NSLOT) bank[s] = { name: f.name, v: fill(f.v), fm: false }; });
@@ -556,6 +577,7 @@ const fill = (v) => Array.from({ length: NP }, (_, i) => (i < v.length ? Math.mi
 document.getElementById("savebank").addEventListener("click", () => {
   const out = []; bank.forEach((b, s) => { if (b) out.push(...frame01(s, b.name, b.v)); });
   if (!out.length) return say("the slots list is empty: read the FM-1 or open a bank first", true);
+  pats.forEach((p, k) => { if (p) out.push(...frame0A(k, p)); });   /* (and the patterns, when there are any) */
   download("MB-1_bank.syx", new Uint8Array(out), "application/octet-stream");
 });
 
@@ -930,6 +952,7 @@ async function connect() {
   view = Math.floor(s / BANK_N);
   say(`MB-1 on ${fm.name}: ${slotName(s)}${edited ? " (edited)" : ""}${fmSlots < NSLOT ? " · update MB-1 for 128 slots" : ""}`);
   await readAll();
+  await readPats();
   const c = await fmReadCur();
   if (c) loadPatch(c.name, c.v, "fm");
   void np;
@@ -942,6 +965,7 @@ async function readAll() {
 function fmUi() {
   document.getElementById("conn").textContent = fm ? "Reconnect" : "Connect";
   liveBtn.disabled = !fm; document.getElementById("rdall").disabled = !fm; document.getElementById("wrall").disabled = !fm;
+  for (const id of ["rdpat", "wrpat", "wrpat1"]) document.getElementById(id).disabled = !fm;
   if (!fm) fmst.textContent = "not connected";
 }
 document.getElementById("conn").addEventListener("click", connect);
@@ -979,6 +1003,117 @@ function fmParam(p, x) {
 }
 function fmPatch() { if (fm && live) fmOut([...HDR, 7, ...nameBytes(cur.name), ...cur.v, 0xF7]); }
 
+/* ------------------------------------------------------------------ the sequencer's patterns (frames 09, 0A) */
+const NPAT = 8, NSTEP = 64;
+const pats = Array.from({ length: NPAT }, () => null);   /* {len, note[64], vel[64], tie[64]} */
+let patSel = 0;
+const frame0A = (k, p) => [...HDR, 0x0A, k, Math.max(1, Math.min(NSTEP, p.len)), ...p.note.map((x) => x & 127), ...p.vel.map((x) => x & 127), ...p.tie.map((x) => (x ? 1 : 0)), 0xF7];
+function patFrames(bytes) {   /* the patterns in a .syx (09 or 0A frames): [{pat, p}] */
+  const out = []; let i = 0;
+  while (i < bytes.length) {
+    if (bytes[i] !== 0xF0) { i++; continue; }
+    let j = i + 1; while (j < bytes.length && bytes[j] !== 0xF7) j++;
+    const f = bytes.slice(i, j + 1); i = j + 1;
+    if (f[1] !== 0x7D || f[2] !== 0x4D || f[3] !== 0x42 || (f[4] !== 9 && f[4] !== 0x0A) || f.length !== 8 + 3 * NSTEP || f[5] >= NPAT) continue;
+    const d = Array.from(f.slice(7, 7 + 3 * NSTEP));
+    out.push({ pat: f[5], p: { len: f[6], note: d.slice(0, NSTEP), vel: d.slice(NSTEP, 2 * NSTEP), tie: d.slice(2 * NSTEP) } });
+  }
+  return out;
+}
+const emptyPat = () => ({ len: 16, note: Array(NSTEP).fill(60), vel: Array(NSTEP).fill(0), tie: Array(NSTEP).fill(0) });
+const NOTE_N = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const noteName = (n) => NOTE_N[n % 12] + (Math.floor(n / 12) - 1);
+function drawPats() {
+  const tabs = document.getElementById("pattabs"); tabs.textContent = "";
+  for (let k = 0; k < NPAT; k++) {
+    const b = document.createElement("button");
+    const p = pats[k], n = p ? p.vel.slice(0, p.len).filter((v, i) => v && !p.tie[i]).length : 0;
+    b.textContent = `P${k + 1}` + (p ? (n ? ` · ${n}` : " · empty") : "");
+    b.classList.toggle("on", k === patSel); b.setAttribute("aria-pressed", k === patSel);
+    b.addEventListener("click", () => { patSel = k; drawPats(); });
+    tabs.appendChild(b);
+  }
+  const to = document.getElementById("patto");
+  if (!to.options.length) for (let k = 0; k < NPAT; k++) to.add(new Option(`P${k + 1}`, k));
+  const cv = document.getElementById("patroll"), g = cv.getContext("2d"), W2 = cv.width, H2 = cv.height;
+  const p = pats[patSel], info = document.getElementById("patinfo");
+  g.fillStyle = "#000"; g.fillRect(0, 0, W2, H2);
+  if (!p) { g.fillStyle = "#6e6e6e"; g.font = "20px 'Barlow Condensed', sans-serif"; g.fillText("Read the FM-1 or open a patterns file", 20, 40); info.textContent = ""; return; }
+  let lo = 127, hi = 0;
+  for (let i = 0; i < p.len; i++) if (p.vel[i] && !p.tie[i]) { lo = Math.min(lo, p.note[i]); hi = Math.max(hi, p.note[i]); }
+  if (lo > hi) { lo = 60; hi = 60; }
+  lo -= lo % 12; hi = Math.min(127, hi - (hi % 12) + 12);
+  const rows = hi - lo + 1, gx = 56, gy = 8, rh = (H2 - 16) / rows, cw = (W2 - gx - 8) / NSTEP, BLK = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+  for (let n = hi; n >= lo; n--) {   /* the rows as a keyboard's */
+    const y = gy + (hi - n) * rh, b = BLK[n % 12];
+    g.fillStyle = b ? "#000" : "#3b3b3b"; g.fillRect(gx, y, cw * NSTEP, rh);
+    g.fillStyle = "#ececec"; g.fillRect(gx - 22, y, 20, rh); if (b) { g.fillStyle = "#000"; g.fillRect(gx - 22, y, 13, rh); }
+    if (n % 12 === 0 || n % 12 === 5) { g.fillStyle = "#000"; g.fillRect(gx - 22, y + rh - 1, 22 + cw * NSTEP, 1); }
+    if (n % 12 === 0) { g.fillStyle = "#a6a6a6"; g.font = "14px 'Barlow Condensed', sans-serif"; g.fillText(noteName(n), 4, y + rh / 2 + 5); }
+  }
+  for (let i = 0; i <= NSTEP; i += 4) { g.fillStyle = i % 16 ? "#000" : "#6e6e6e"; g.fillRect(gx + i * cw - 1, gy, i % 16 ? 1 : 2, rows * rh); }
+  g.fillStyle = "rgba(0,0,0,.7)"; g.fillRect(gx + p.len * cw, gy, (NSTEP - p.len) * cw, rows * rh);   /* past the end */
+  let pitch = -1;
+  for (let i = 0; i < p.len; i++) {
+    if (p.tie[i]) { if (pitch >= 0) { g.fillStyle = "#f06028"; g.fillRect(gx + i * cw - 1, gy + (hi - pitch) * rh + 1, cw + 1, rh - 2); } }
+    else if (p.vel[i]) { pitch = p.note[i]; g.fillStyle = "#f06028"; g.fillRect(gx + i * cw + 1, gy + (hi - pitch) * rh + 1, cw - 2, rh - 2); }
+    else pitch = -1;
+  }
+  const notes = p.vel.slice(0, p.len).filter((v, i) => v && !p.tie[i]).length;
+  info.textContent = `P${patSel + 1}: ${p.len} steps, ${notes} notes` + (notes ? `, ${noteName(Math.min(...p.note.filter((n, i) => i < p.len && p.vel[i] && !p.tie[i])))} to ${noteName(Math.max(...p.note.filter((n, i) => i < p.len && p.vel[i] && !p.tie[i])))}` : "");
+}
+async function fmReadPat(k) {
+  const pr = expect((d) => (d[4] === 9 && d[5] === k) || (d[4] === 0x7F && d[5] === 9), 1500);
+  fm.out.send([...HDR, 9, k, 0xF7]);
+  const d = await pr; if (!d || d[4] === 0x7F) return null;
+  const f = patFrames(d)[0]; return f ? f.p : null;
+}
+async function readPats() {
+  if (!fm) return;
+  let got = 0;
+  for (let k = 0; k < NPAT; k++) { const p = await fmReadPat(k); if (p) { pats[k] = p; got++; } document.getElementById("patst").textContent = `reading ${k + 1}/${NPAT}`; }
+  document.getElementById("patst").textContent = got ? "" : "this MB-1 has no pattern transfer: update it to 0.20";
+  drawPats();
+}
+async function writePat(k) {
+  if (!fm || !pats[k]) return false;
+  return (await fmSend(frame0A(k, pats[k]), 0x0A, 3000)) === 0;
+}
+document.getElementById("rdpat").addEventListener("click", readPats);
+document.getElementById("wrpat").addEventListener("click", async () => {
+  if (!fm || !confirm("Write every pattern in the list to the FM-1? They replace its patterns.")) return;
+  let ok = 0, n = 0;
+  for (let k = 0; k < NPAT; k++) if (pats[k]) { n++; if (await writePat(k)) ok++; }
+  say(ok === n ? `${n} patterns written and stored` : `written ${ok} of ${n}`, ok !== n);
+});
+document.getElementById("wrpat1").addEventListener("click", async () => {
+  if (!pats[patSel]) return say("this pattern is empty here: read the FM-1 or open a file", true);
+  say(await writePat(patSel) ? `P${patSel + 1} written and stored` : "the FM-1 did not take it", false);
+});
+document.getElementById("patcopy").addEventListener("click", () => {
+  const to = Number(document.getElementById("patto").value);
+  if (!pats[patSel]) return say("nothing to copy: this pattern is empty here", true);
+  if (to === patSel) return;
+  if (pats[to] && !confirm(`Replace P${to + 1} with P${patSel + 1} (here; Write sends it to the FM-1)?`)) return;
+  pats[to] = JSON.parse(JSON.stringify(pats[patSel])); patSel = to; drawPats();
+  say(`copied to P${to + 1} (here: Write this one sends it)`);
+});
+document.getElementById("patclear").addEventListener("click", () => {
+  if (!confirm(`Clear P${patSel + 1} here (Write sends it to the FM-1)?`)) return;
+  pats[patSel] = emptyPat(); drawPats();
+});
+document.getElementById("savepat").addEventListener("click", () => {
+  const out = []; pats.forEach((p, k) => { if (p) out.push(...frame0A(k, p)); });
+  if (!out.length) return say("no patterns here: read the FM-1 or open a file first", true);
+  download("MB-1_patterns.syx", new Uint8Array(out), "application/octet-stream");
+});
+document.getElementById("openpat").addEventListener("change", async (e) => {
+  const b = await readFile(e.target); if (!b) return;
+  const fr = patFrames(b); if (!fr.length) return say("no MB-1 patterns in that file", true);
+  fr.forEach((f) => { pats[f.pat] = f.p; }); patSel = fr[0].pat; drawPats();
+  say(`${fr.length} patterns: here (not on the FM-1 until you write them)`);
+});
+
 /* ------------------------------------------------------------------ start */
 (async () => {
   try {
@@ -992,7 +1127,7 @@ function fmPatch() { if (fm && live) fmOut([...HDR, 7, ...nameBytes(cur.name), .
   } catch (e) { say("the engine did not load: " + e.message, true); }
   for (let i = 0; i < NP; i++) cur.v[i] = meta.init[i];
   cur.name = "INIT    ";
-  drawSheet(); drawKeys(); drawSlots(); themeLabel(); fmUi();
+  drawSheet(); drawKeys(); drawSlots(); drawPats(); themeLabel(); fmUi();
 })();
 </script>
 </body>

@@ -5,7 +5,8 @@ each SMK package, its words for the SMK-37, without what is the FM-1's only (its
 m-bootloader). After SQ-80's (sq80-fm1 tools/make_smk_install.py); MB-1 has no install steps of its own.
 
     python3 tools/make_smk_install.py PKG_DIR VERSION SITE_DIR
-      -> SITE_DIR/smk37/install/ (SMK-37 Pro, Starrykey 37), install-elite/, install-mke/; the packages in smk37/
+      -> SITE_DIR/smk37/install/ (SMK-37 Pro, Starrykey 37), install-elite/, install-mke/; the packages in smk37/;
+         with the site's backup/ page (fm1.toml backup), smk37/backup/, backup-elite/, backup-mke/ for their identities
 """
 import json
 import re
@@ -84,6 +85,19 @@ def main(pkg_dir, version, site):
         (site / "smk37" / sub).mkdir(parents=True, exist_ok=True)
         (site / "smk37" / sub / "index.html").write_text(page, encoding="utf-8")
         print(f"smk37/{sub}/: {product} ({name})")
+        bak = site / "backup" / "index.html"   # the backup page (make_site.py's, backup = true), for this model's identity
+        if bak.exists():
+            page_b = bak.read_text(encoding="utf-8")
+            fm_id = 'id: "' + conf.get("id_prefix", "") + '"'
+            if page_b.count(fm_id) != 1:
+                raise SystemExit(f"{bak}: {fm_id!r} not found once")
+            prefix = product[:product.index("_") + 2]   # (SMK-37 Pro_4: the model and the first digit, as build.py)
+            page_b = smk_words(page_b.replace(fm_id, 'id: "\0ID\0"')).replace("\0ID\0", prefix)
+            page_b = page_b.replace("MB1", "MB-1").replace("<title>", "<title>SMK-37 · ", 1)
+            sub_b = sub.replace("install", "backup")
+            (site / "smk37" / sub_b).mkdir(parents=True, exist_ok=True)
+            (site / "smk37" / sub_b / "index.html").write_text(page_b, encoding="utf-8")
+            print(f"smk37/{sub_b}/: {prefix}")
 
 
 if __name__ == "__main__":

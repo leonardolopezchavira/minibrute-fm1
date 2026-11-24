@@ -824,7 +824,7 @@ static int bank_migrate(void)                /* an older bank A (47 .. 64 parame
     return 0;
 }
 
-void app_init(void)
+static void store_load(void)                 /* the banks, the settings, the patterns from the flash */
 {
     uint32_t i, j;
     for (i = 0; i < NBANK; i++) {            /* (bank A may be an older one; B .. D new in 0.12: INIT) */
@@ -852,7 +852,6 @@ void app_init(void)
     set.slot = 0;                            /* power-on: A01, as stored (an unsaved edit is not kept) */
     set.cur = SLOT(0);
     set.edited = 0;
-    arp.state = arp_posted = set.cur.v[P_ARP];   /* (as the patch has it) */
     if (plat_store_load(OBJ_SEQ, &sq, sizeof sq) != (int)sizeof sq || sq.magic != SEQ_MAGIC) {
         sq.magic = SEQ_MAGIC;                /* empty patterns of 16 steps */
         for (i = 0; i < NPAT; i++) {
@@ -866,6 +865,12 @@ void app_init(void)
     }
     for (i = 0; i < NPAT; i++)
         sq.pat[i].len = (uint8_t)seq_len(&sq.pat[i]);
+}
+
+void app_init(void)
+{
+    store_load();
+    arp.state = arp_posted = set.cur.v[P_ARP];   /* (as the patch has it) */
     params_from(set.cur.v, &voice.p);
     mb_init(&voice, 44100.0f);
     mbfx_init(&fx, 44100.0f, fx_mem);
@@ -883,6 +888,8 @@ void app_init(void)
  *   03                      bank A's factory slots back (stored; banks B .. D stay as they are)
  *   04 SLOT                 a slot played (as PRESET)
  *   05 SLOT                 a slot's patch sent back: F0 7D 4D 42 05 SLOT NAME[8] V[NP] F7 (01's layout)
+ *   09 PAT                  a sequencer pattern (0..7) sent back: F0 7D 4D 42 09 PAT LEN NOTE[64] VEL[64] TIE[64] F7
+ *   0A PAT LEN NOTE[64] VEL[64] TIE[64]   a pattern in (stored); VEL 0: a rest, TIE 1: a tie (0.20)
  *   06                      what is there: F0 7D 4D 42 06 NP NBANK SLOT EDITED F7 (banks of 32; the slot playing,
  *                           1: edited)
  *   08                      the sound playing sent back, as it is now (edits not saved included): F0 7D 4D 42 08 SLOT
@@ -907,6 +914,7 @@ static int bank_store(void)
     }
     return r;
 }
+static void seq_store(void);
 int app_sysex(const uint8_t *p, uint32_t n)
 {
     uint32_t cmd, i;
@@ -965,6 +973,38 @@ int app_sysex(const uint8_t *p, uint32_t n)
         set_dirty = 1;
         params_stale = 1;
         sysex_answer(cmd, 0);
+        return 1;
+    } else if (cmd == 9u && n == 5u && p[4] < NPAT) {   /* a pattern sent back */
+        const seqpat_t *pt = &sq.pat[p[4]];
+        uint8_t f[8u + 3u * NSTEP] = {0xF0, 0x7D, 0x4D, 0x42, 9, p[4], (uint8_t)seq_len(pt)};
+        for (i = 0; i < NSTEP; i++) {
+            f[7u + i] = pt->note[i] & 0x7Fu;
+            f[7u + NSTEP + i] = pt->vel[i] & 0x7Fu;
+            f[7u + 2u * NSTEP + i] = pt->flag[i] & SF_TIE;
+        }
+        f[7u + 3u * NSTEP] = 0xF7;
+        (void)plat_sysex_send(f, sizeof f);
+        return 1;
+    } else if (cmd == 10u && n == 6u + 3u * NSTEP && p[4] < NPAT && p[5] >= 1u && p[5] <= NSTEP) {   /* a pattern in */
+        seqpat_t *pt = &sq.pat[p[4]];
+        pt->len = p[5];
+        for (i = 0; i < NSTEP; i++) {
+            pt->note[i] = p[6u + i];
+            pt->vel[i] = p[6u + NSTEP + i];
+            pt->flag[i] = p[6u + 2u * NSTEP + i] & SF_TIE;
+        }
+        sq_dirty = 1;
+        sq_changed_ms = plat_ms();
+        seq_store();
+        {
+            char o[4];
+            t[0] = 0;
+            text_cat(t, "PATTERN ");
+            int_text((int32_t)p[4] + 1, o);
+            text_cat(t, o);
+            app_say(t, "LOADED");
+        }
+        sysex_answer(cmd, sq_dirty ? 1u : 0u);   /* (1: not stored, a backup was streaming: stored later) */
         return 1;
     } else {
         sysex_answer(cmd, 1);
@@ -1326,10 +1366,39 @@ static void seq_step_write(uint32_t note, uint32_t vel, uint32_t flag)   /* step
     ui.redraw = 1;
 }
 
+static uint8_t bu_hold;                      /* a backup streams: nothing saved meanwhile */
 static void seq_store(void)
 {
+    if (bu_hold)                             /* (later: it stays dirty) */
+        return;
     if (plat_store_save(OBJ_SEQ, &sq, sizeof sq) == 0)
         sq_dirty = 0;
+}
+
+/* Backup and restore over USB (fm1-base device/backup.c; the site's backup/ page): the settings, the four banks and
+ * the patterns (app.h APP_BACKUP_OBJS), all or nothing. A restore waits for the sequencer to stop. */
+int app_backup_playing(void) { return seq_running; }
+void app_backup_flush(void)                  /* a backup starts: what is not saved yet, saved */
+{
+    if (sq_dirty)
+        seq_store();
+    if (bank_dirty)
+        (void)banks_save();
+    if (set_dirty && plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0)
+        set_dirty = 0;
+}
+void app_backup_hold(int on) { bu_hold = (uint8_t)(on != 0); }
+void app_backup_restored(void)               /* everything from the flash again, as at power-on (A01) */
+{
+    store_load();
+    arp_posted = set.cur.v[P_ARP];
+    post(Q_ARP, arp_posted, 0);              /* (the arpeggiator as the patch has it; every note off) */
+    set_dirty = 0;
+    bank_dirty = 0;
+    sq_dirty = 0;
+    params_stale = 1;
+    ui.redraw = 1;
+    app_say("RESTORED", "FROM USB");
 }
 
 static void rec_button(void)

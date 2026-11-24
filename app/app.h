@@ -27,6 +27,17 @@ enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_BLE, OBJ_BANK, OBJ_SEQ, OBJ_BANK_B, OBJ_BANK
                                          * area's sectors in pairs: bank A, the sequences, banks B, C, D) */
 #endif
 
+/* backup and restore over USB (fm1.toml backup: fm1-base device/backup.c; the site's backup/ page): everything MB-1
+ * saves but the panel's calibration and Bluetooth's pairings (the unit's) */
+#define APP_BACKUP_OBJS {OBJ_SETTINGS, OBJ_BANK, OBJ_BANK_B, OBJ_BANK_C, OBJ_BANK_D, OBJ_SEQ}
+#define APP_BACKUP_MAGIC 0x4B31424Du       /* "MB1K" */
+#define APP_BACKUP_VERSION 1
+#define APP_BACKUP_WHAT "REPLACES PATCHES AND PATTERNS"
+int app_backup_playing(void);
+void app_backup_flush(void);
+void app_backup_hold(int on);
+void app_backup_restored(void);
+
 void app_init(void);
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12);
 void app_panic(void);

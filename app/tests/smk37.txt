@@ -298,3 +298,28 @@ wait 30
 pad 0
 wait 30
 expect rollpick 0
+# backup and restore over USB (the site's backup/ page) on the SMK-37 too
+tap HOME
+wait 30
+expect seqrec 0
+wait 30
+tap REC
+wait 30
+key 7 down 100
+wait 30
+key 7 up
+wait 30
+tap REC
+wait 2500
+expect seqnotes 1
+backup out:s.mb1
+wait 300
+press REC
+wait 1200
+release REC
+wait 2500
+expect seqnotes 0
+restore out:s.mb1
+wait 300
+expect restore_rc 0
+expect seqnotes 1
