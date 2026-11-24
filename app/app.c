@@ -1501,22 +1501,18 @@ static void pf_faders(void)
 /* The sequencer on the pads: while it plays, and on the piano roll, the 16 pads are 16 steps (the top row 1..8, the
  * bottom 9..16 of the 16 shown): the step playing bright orange, a note white, a tie a dim orange, a rest dark, past
  * the pattern's end off; on the piano roll the step picked is lit too. On the piano roll the pads pick the step (REC
- * stopped: the next key, FX or FX with a key is written there), SEQ held with < or > shows the 16 before or after.
+ * stopped: the next key, FX or FX with a key is written there), < and > show the 16 before or after (1-16 .. 49-64).
  * Elsewhere the pads are the white keys, as before. */
 static uint32_t roll_win;                    /* the piano roll's 16 steps: roll_win * 16 .. + 15 (stopped) */
 static uint32_t roll_pick = 0xFFu;           /* the step the pads picked (0xFF: none) */
 static void roll_say(void);
 static uint32_t roll_window(void)
 {
-    uint32_t L = seq_len(seq_pat()), nwin;
-    if (roll_pick < NSTEP && roll_pick + 1u > L)   /* (a step picked past the end: shown) */
-        L = roll_pick + 1u;
-    nwin = (L + 15u) / 16u;
     if (seq_running)
         return seq_cur_now / 16u;
     if (seq_rec)                             /* (step entry: where the next step goes) */
         return (seq_edit % NSTEP) / 16u;
-    return roll_win < (nwin > 4u ? 4u : nwin) ? roll_win : 0u;
+    return roll_win & 3u;                    /* (< >: any of the four, past the pattern's end too) */
 }
 
 static void pf_pads(void)
@@ -1702,9 +1698,22 @@ static void smk_input(void)
         pf_set(!pf.on);
     if (hits & (1u << SB_FADER_BANK))
         pf_fader_bank(pf.bank + 1u);
-    if ((hits & ((1u << SB_LEFT) | (1u << SB_RIGHT))) && set.page == PG_ROLL && (plat_buttons() & (1u << B_SEQ))) {
-        uint32_t L = seq_len(seq_pat()), nwin = (L + 15u) / 16u;   /* SEQ held, on the piano roll: its 16 steps */
-        roll_win = (roll_window() + nwin + ((hits & (1u << SB_RIGHT)) ? 1u : nwin - 1u)) % nwin;
+    if ((hits & ((1u << SB_LEFT) | (1u << SB_RIGHT))) && set.page == PG_ROLL) {
+        /* the piano roll: < > its 16 steps, 1-16, 17-32, 33-48, 49-64 (a pattern's room, past its end too: a step
+         * picked there makes it longer) */
+        char t[12], o[4];
+        roll_win = (roll_window() + 4u + ((hits & (1u << SB_RIGHT)) ? 1u : 3u)) % 4u;
+        if (seq_rec && !seq_running) {       /* (step entry: the next step goes there) */
+            seq_edit = roll_win * 16u;
+            seq_picked = 1;
+        }
+        t[0] = 0;
+        int_text((int32_t)roll_win * 16 + 1, o);
+        text_cat(t, o);
+        text_cat(t, "-");
+        int_text((int32_t)roll_win * 16 + 16, o);
+        text_cat(t, o);
+        app_say("STEPS", t);
         ui.redraw = 1;
     } else if (hits & ((1u << SB_LEFT) | (1u << SB_RIGHT))) {   /* < >: the patch before, the next */
         char t[16];
@@ -2240,9 +2249,9 @@ static void draw(void)
         int_text((int32_t)win * 16 + 1, o);
         text_cat(t, o);
         text_cat(t, "-");
-        int_text((int32_t)(win * 16u + 16u < L ? win * 16u + 16u : L), o);
+        int_text((int32_t)win * 16 + 16, o);
         text_cat(t, o);
-        text_cat(t, "/");
+        text_cat(t, "  LEN ");
         int_text((int32_t)L, o);
         text_cat(t, o);
         cv_text(236 - text_w(&FONT_XS, t), 0, &FONT_XS, t, C_GRAY);

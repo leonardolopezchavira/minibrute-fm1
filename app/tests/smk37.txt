@@ -285,3 +285,16 @@ wait 30
 expect sv2 0
 expect roll 1
 shot smk_roll_edit.png
+# the piano roll: < > its 16 steps (17-32 ...), not the patch
+smkbtn RIGHT
+wait 30
+expect roll 1
+expect slot 0
+pad 0
+wait 30
+expect rollpick 16
+smkbtn LEFT
+wait 30
+pad 0
+wait 30
+expect rollpick 0
