@@ -213,3 +213,38 @@ expect st3 1
 tap REC
 wait 30
 expect seqrec 0
+# the octaves -3 .. +3: an 88-key piano's range (A0 .. C8) in step entry and playing (A01's arpeggiator off)
+tap ARP
+wait 30
+tap ARP
+wait 30
+tap OCT-
+tap OCT-
+tap OCT-
+tap OCT-
+wait 30
+expect octave -3
+outer 0 down 90
+wait 100
+expect note 12
+outer 0 up
+wait 30
+tap OCT+
+tap OCT+
+tap OCT+
+tap OCT+
+tap OCT+
+tap OCT+
+tap OCT+
+wait 30
+expect octave 3
+outer 36 down 90
+wait 100
+expect note 120
+outer 36 up
+wait 30
+tap OCT-
+tap OCT-
+tap OCT-
+wait 30
+expect octave 0

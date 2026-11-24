@@ -95,7 +95,7 @@ static int banks_save(void)              /* the banks that changed: 0 = stored *
 #define SET_MAGIC 0x4D423156u            /* "MB1V": 0.9 ("MB1U": 0.8, "MB1T": 0.3 .. 0.7, "MB1S": 0.1 .. 0.2) */
 typedef struct {
     uint32_t magic;
-    int8_t octave;                       /* -2 .. +2 */
+    int8_t octave;                       /* -3 .. +3 */
     uint8_t slot;                        /* 0 .. 127: A01 .. D32 */
     uint8_t page;
     uint8_t edited;                      /* the patch differs from its slot */
@@ -841,7 +841,7 @@ void app_init(void)
             if (SLOT(i).v[j] > pmax(j))
                 SLOT(i).v[j] = (uint8_t)pmax(j);
     if (plat_store_load(OBJ_SETTINGS, &set, sizeof set) != (int)sizeof set || set.magic != SET_MAGIC ||
-        set.octave < -2 || set.octave > 2 || set.slot >= NSLOT || set.page >= NPAGE)
+        set.octave < -3 || set.octave > 3 || set.slot >= NSLOT || set.page >= NPAGE)
         settings_defaults();
     for (j = 0; j < NP; j++)
         if (set.cur.v[j] > pmax(j))
@@ -1255,7 +1255,7 @@ static void save(void)
 
 static void octave_step(int32_t d)
 {
-    int32_t o = clamp(set.octave + d, -2, 2);
+    int32_t o = clamp(set.octave + d, -3, 3);   /* (-3..+3: an 88-key piano's A0..C8, and more) */
     char t[4];
     if (o == set.octave)
         return;

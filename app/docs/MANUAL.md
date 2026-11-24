@@ -29,7 +29,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | ALGO | The mod wheel (sent as MIDI CC 1 too). Where it goes: CONTROLS (EDIT), WHEEL TO |
 | PRESET | The patch slot, A01..D32: 128 slots in four banks of 32. Turning it loads the slot (unsaved changes are dropped) |
 | SAVE | Pressed once: the save screen. **K1** moves along the name and **K2** changes the letter under it (A-Z, 0-9, space and - # & + . !); **PRESET** picks where, any of the 128 slots (its own first; the screen names the patch it would replace). **SAVE** again stores it there, with its name, and plays from there. Any other button cancels (the name as it was). Lit when there is something to save |
-| OCT- / OCT+ | The keyboard's octave, -2..+2 |
+| OCT- / OCT+ | The keyboard's octave, -3..+3: the keys reach an 88-key piano's whole range (A0..C8), for playing and for the sequencer |
 | ARP | The arpeggiator: OFF, ON, HOLD in turn (and its page). Held half a second: its pages, ARP and ARP 2. Lit while it runs, dark a moment on each beat |
 | SEQ | The sequencer's page |
 | PLAY | The sequencer: start (from the first step) and stop. Lit while it plays, dark a moment on each beat. With SEQ held: tap tempo, tap it on the beat |

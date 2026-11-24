@@ -73,7 +73,7 @@ CONTROLS = [
     ("SELECT", "steps through every page"),
     ("PRESET", "the slot, A01&ndash;D32 (4 banks of 32); turning it loads the slot"),
     ("ALGO", "the mod wheel (CC 1); where it goes: EDIT &rsaquo; CONTROLS &rsaquo; WHEEL TO"),
-    ("OCT&minus; / OCT+", "the keyboard, &minus;2 to +2 octaves"),
+    ("OCT&minus; / OCT+", "the keyboard, &minus;3 to +3 octaves (A0&ndash;C8 and more)"),
     ("Keys", "velocity; press harder for aftertouch"),
 ]
 SHORTCUTS = [
