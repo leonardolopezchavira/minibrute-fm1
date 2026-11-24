@@ -1281,6 +1281,8 @@ static void tap_tempo(void)                 /* SEQ held, PLAY tapped: the tempo 
 
 static uint32_t arp_down_ms;
 static uint8_t arp_long;
+static uint32_t rec_down_ms;                 /* REC: pressed (it acts on release), held a second: the pattern cleared */
+static uint8_t rec_long;
 static uint32_t pg_btn = 0xFFu, pg_down_ms;   /* a page button held: back to its first page after 500 ms */
 
 /* the sequencer from the panel: PLAY starts and stops it, REC arms recording (stopped: step entry, a key a step,
@@ -1726,8 +1728,10 @@ static void input(void)
             arp_long = 0;
         } else if (k == B_PLAY)
             play_button(btn);
-        else if (k == B_REC)
-            rec_button();
+        else if (k == B_REC) {               /* (on release: a long press clears the pattern) */
+            rec_down_ms = plat_ms();
+            rec_long = 0;
+        }
         else if (k == B_FX && seq_rec && !seq_running)   /* step entry: a rest, or with a key held a tie */
             seq_step_write(keys && seq_key_note >= 0 ? (uint32_t)seq_key_note : 60u, 0,
                            keys && seq_key_note >= 0 ? SF_TIE : 0u);
@@ -1763,6 +1767,30 @@ static void input(void)
     }
     if (sq_dirty && !seq_rec && !seq_running && plat_ms() - sq_changed_ms > 2000u)   /* (LENGTH and the rest) */
         seq_store();
+    if ((btn & 1u << B_REC) && !rec_long && plat_ms() - rec_down_ms >= 1000u) {   /* REC held: the pattern cleared */
+        seqpat_t *pt = seq_pat();
+        uint32_t j;
+        char t[12] = "PATTERN ", o[4];
+        rec_long = 1;
+        for (j = 0; j < NSTEP; j++) {
+            pt->note[j] = 60;
+            pt->vel[j] = 0;
+            pt->flag[j] = 0;
+        }
+        pt->len = 16;
+        seq_edit = 0;                        /* (step entry: from the first step again) */
+        seq_entered = 0;
+        seq_picked = 0;
+        seq_key_note = -1;
+        sq_dirty = 1;
+        sq_changed_ms = plat_ms();
+        int_text((int32_t)set.g[G_SPAT - NP] % (int32_t)NPAT + 1, o);
+        text_cat(t, o);
+        app_say(t, "CLEARED");
+        ui.redraw = 1;
+    }
+    if (!(btn & 1u << B_REC) && (ui.btn & 1u << B_REC) && !rec_long)   /* REC pressed: armed, or not */
+        rec_button();
     if ((btn & 1u << B_ARP) && !arp_long && plat_ms() - arp_down_ms >= 500u) {   /* ARP held: ARP / ARP 2 */
         arp_long = 1;
         page_button(B_ARP);

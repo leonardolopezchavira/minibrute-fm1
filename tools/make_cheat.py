@@ -87,6 +87,7 @@ SHORTCUTS = [
     ("SEQ held + PLAY", "tap tempo, on the beat"),
     ("REC (stopped)", "step entry: a key writes a step; <b>FX</b> a rest; key held + <b>FX</b> a tie; REC ends"),
     ("REC (playing)", "records in time, to the nearest step; REC ends"),
+    ("REC held", "clears the pattern"),
 ]
 SCREEN = [
     ("A01 NAME *", "the slot and name; * changed since saved"),

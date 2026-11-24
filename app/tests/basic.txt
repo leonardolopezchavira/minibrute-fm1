@@ -1250,3 +1250,18 @@ key 7 up
 wait 600
 sysex F0 7D 4D 42 04 00 F7
 wait 100
+# REC held a second: the pattern cleared (and REC not armed); a tap still arms it
+expect seqnotes >0
+press REC
+wait 1200
+release REC
+wait 30
+expect seqrec 0
+expect seqnotes 0
+expect seqlen 16
+tap REC
+wait 30
+expect seqrec 1
+tap REC
+wait 30
+expect seqrec 0

@@ -33,7 +33,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | ARP | The arpeggiator: OFF, ON, HOLD in turn (and its page). Held half a second: its pages, ARP and ARP 2. Lit while it runs, dark a moment on each beat |
 | SEQ | The sequencer's page |
 | PLAY | The sequencer: start (from the first step) and stop. Lit while it plays, dark a moment on each beat. With SEQ held: tap tempo, tap it on the beat |
-| REC | Arms recording into the sequencer: stopped, step by step; playing, in time. Lit while armed |
+| REC | Arms recording into the sequencer: stopped, step by step; playing, in time. Lit while armed. Held a second: clears the pattern (all rests, 16 steps) |
 | The keys | Notes with velocity; pressing harder is aftertouch |
 
 ## The pages
