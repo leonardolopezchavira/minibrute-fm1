@@ -57,7 +57,13 @@ static const page_t PAGE[] = {
 #endif
 };
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
-#define PG_ROLL (APP_SMK ? NPAGE - 1u : NPAGE)   /* the SMK-37's piano roll (none on the FM-1) */
+#define PG_ROLL (APP_SMK ? NPAGE - 1u : NPAGE)
+#if APP_SMK
+static int outer_held(void);
+#define OUTER_HELD() outer_held()
+#else
+#define OUTER_HELD() 0
+#endif   /* the SMK-37's piano roll (none on the FM-1) */
 
 /* ---------------------------------------------------------------- patches --- */
 #define NBANK 4u                         /* A..D */
@@ -1572,6 +1578,15 @@ static void pf_pads(void)
 /* the volume (MASTER: K1 on the pages), shown in the foot and, as it changes, at the top; 50 % at power-on */
 static uint32_t vol_pct(void) { return (plat_master() * 100u + 2048u) / 4096u; }
 
+static int outer_held(void)                  /* an outer key held (step entry: FX with it, a tie) */
+{
+    uint32_t k;
+    for (k = 0; k < SMK_NKEYBED; k++)
+        if (smk.outer[k])
+            return 1;
+    return 0;
+}
+
 static void smk_note(uint32_t note, uint32_t vel)
 {
     post(vel ? Q_ON : Q_OFF, note, vel);
@@ -1646,6 +1661,10 @@ static void smk_input(void)
             if (smk.outer[key])
                 smk_note(smk.outer[key] - 1u, 0);
             smk.outer[key] = (uint8_t)(note + 1);
+            if (seq_rec && !seq_running) {   /* step entry: the outer keys too (as the middle ones) */
+                seq_step_write((uint32_t)note, v ? v : 1u, 0);
+                seq_key_note = note;
+            }
             smk_note((uint32_t)note, v);
         } else if (smk.outer[key]) {
             smk_note(smk.outer[key] - 1u, 0);
@@ -1733,8 +1752,8 @@ static void input(void)
             rec_long = 0;
         }
         else if (k == B_FX && seq_rec && !seq_running)   /* step entry: a rest, or with a key held a tie */
-            seq_step_write(keys && seq_key_note >= 0 ? (uint32_t)seq_key_note : 60u, 0,
-                           keys && seq_key_note >= 0 ? SF_TIE : 0u);
+            seq_step_write((keys || OUTER_HELD()) && seq_key_note >= 0 ? (uint32_t)seq_key_note : 60u, 0,
+                           (keys || OUTER_HELD()) && seq_key_note >= 0 ? SF_TIE : 0u);
         else {
             page_button(k);
             pg_btn = k;

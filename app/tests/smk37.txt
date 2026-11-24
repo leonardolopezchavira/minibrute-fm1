@@ -193,3 +193,23 @@ expect slot 0
 expect edited 0
 expect p0 110
 shot smk_after.png
+# step entry with the outer keys (C3 .. E3, G#5 .. C6) as with the middle ones; FX with one held: a tie
+tap REC
+wait 30
+expect seqrec 1
+outer 0 down 90
+wait 30
+outer 0 up
+wait 30
+expect sn1 48
+outer 36 down 90
+wait 30
+tap FX
+wait 30
+outer 36 up
+wait 30
+expect sn2 84
+expect st3 1
+tap REC
+wait 30
+expect seqrec 0
