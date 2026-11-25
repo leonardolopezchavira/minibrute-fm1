@@ -1352,3 +1352,13 @@ shot fm1_roll.png
 tap HOME
 wait 30
 expect roll 0
+# the LFO page: CLOCK (K8, the instrument's), FREE or SYNC
+tap HOME
+wait 30
+tap LFO
+wait 30
+turn K4 1
+wait 60
+shot lfo_clock.png
+turn K4 -1
+wait 60

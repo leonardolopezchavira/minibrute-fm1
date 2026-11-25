@@ -32,7 +32,7 @@ static const char *const AOCT_NAME[] = {"1 OCT", "2 OCT", "3 OCT", "4 OCT"};
 static const char *const ASTEP_NAME[] = {"1/4", "1/8", "1/16", "1/4T", "1/8T", "1/16T"};
 static const char *const HORD_NAME[] = {"PITCH", "PLAYED"};
 static const char *const KEYS_NAME[] = {"YES", "NO"};   /* (the SMK-37's keys: GLOBAL VEL SENS, VELOCITY SENSITIVE) */
-static const char *const LSYNC_NAME[] = {"FREE", "ARP"};
+static const char *const LSYNC_NAME[] = {"FREE", "SYNC"};
 static const char *const DSYNC_NAME[] = {"FREE", "CLOCK"};
 static const char *const DMODE_NAME[] = {"STEREO", "PING-PONG"};
 static const char *const FXORD_NAME[] = {"DLY>REV", "REV>DLY"};
@@ -97,7 +97,7 @@ static const param_t PARAM[NP] = {
 static const param_t GPARAM[NG] = {
     [G_SSTEP - NP] = {"STEP", T_ASTEP, 0},     [G_SSWING - NP] = {"SWING", T_ASWING, 0},
     [G_TEMPO - NP] = {"TEMPO", T_TEMPO, 0},
-    [G_HORD - NP] = {"HOLD ORD", T_HORD, 0},   [G_LSYNC - NP] = {"LFO CLK", T_LSYNC, 0},
+    [G_HORD - NP] = {"HOLD ORD", T_HORD, 0},   [G_LSYNC - NP] = {"CLOCK", T_LSYNC, 0},
     [G_SPAT - NP] = {"PATTERN", T_SPAT, 0},    [G_SLEN - NP] = {"LENGTH", T_SLEN, 0},
     [G_KEYS - NP] = {"VEL SENS", T_KEYS, 0},
 };
@@ -207,7 +207,7 @@ static float kthr_db(uint32_t x) { return -60.0f + 80.0f * lvl(x); }
 static float kratio(uint32_t x) { return taper(TP_KRAT, x); }
 static float katt_ms(uint32_t x) { return taper(TP_KATT, x); }
 static float krel_ms(uint32_t x) { return taper(TP_KREL, x); }
-/* the LFO on the arpeggiator's clock (LFO CLK: ARP): RATE picks a note value, as the plugin's synced rates
+/* the LFO on the arpeggiator's clock (LFO page CLOCK: SYNC): RATE picks a note value, as the plugin's synced rates
  * (8 bars dotted .. a 64th triplet); its length in beats */
 static const char *const LSYNC_DIV[30] = {"8.D", "8", "4.D", "8.T", "4", "2.D", "4.T", "2", "1.D", "2.T", "1",
     "1/2.D", "1.T", "1/2", "1/4.D", "1/2.T", "1/4", "1/8.D", "1/4.T", "1/8", "1/16.D", "1/8.T", "1/16", "1/32.D",

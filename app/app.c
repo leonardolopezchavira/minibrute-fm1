@@ -42,13 +42,13 @@ static const page_t PAGE[] = {
     {"TRI", B_SEL, {P_TRI, P_METAL, P_MTENV, P_NONE}},        {"SUB", B_SEL, {P_SUB, P_SUBSHP, P_SUBOCT, P_NOISE}},
     {"FILT ENV", B_ENV, {P_FA, P_FD, P_FS, P_FR}},            {"AMP ENV", B_ENV, {P_AA, P_AD, P_AS, P_AR}},
     {"VELOCITY", B_ENV, {P_FVEL, P_AVEL, P_NONE, P_NONE}},
-    {"LFO", B_LFO, {P_LRATE, P_LWAVE, P_LRTRG, P_NONE}},      {"LFO AMT", B_LFO, {P_LPITCH, P_LFILT, P_LPWM, P_LAMP}},
+    {"LFO", B_LFO, {P_LRATE, P_LWAVE, P_LRTRG, G_LSYNC}},      {"LFO AMT", B_LFO, {P_LPITCH, P_LFILT, P_LPWM, P_LAMP}},
     {"VIBRATO", B_LFO, {P_VRATE, P_VTYPE, P_NONE, P_NONE}},
     {"PLAY", B_EDIT, {P_PLAY, P_GLIDE, P_BEND, P_VINT}},      {"CONTROLS", B_EDIT, {P_WDEST, P_WAMT, P_ATVIB, P_ATCUT}},
 #if APP_SMK
-    {"GLOBAL", B_GLO, {G_TEMPO, G_HORD, G_LSYNC, G_KEYS}},   /* (the SMK-37: VELOCITY SENSITIVE, YES or NO) */
+    {"GLOBAL", B_GLO, {G_TEMPO, G_HORD, P_NONE, G_KEYS}},   /* (the SMK-37: VELOCITY SENSITIVE, YES or NO) */
 #else
-    {"GLOBAL", B_GLO, {G_TEMPO, G_HORD, G_LSYNC, P_NONE}},
+    {"GLOBAL", B_GLO, {G_TEMPO, G_HORD, P_NONE, P_NONE}},
 #endif
 #if APP_SMK
     {"KEY TEST", B_GLO, {P_NONE, P_NONE, P_NONE, P_NONE}},   /* (GLO again: the keybed measured) */
