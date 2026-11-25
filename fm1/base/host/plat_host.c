@@ -319,6 +319,16 @@ uint32_t plat_smk_button_hits(void)
     return hit;
 }
 void plat_smk_leds(uint32_t lit) { smk_led = lit; }
+static uint32_t smk_ktq_h[64], smk_ktq_hw, smk_ktq_hr;   /* (MB-1) the key test's events: script ktev */
+static uint64_t smk_kt_hc1, smk_kt_hc2;
+int plat_smk_keytest(uint32_t *ev)
+{
+    if (smk_ktq_hr == smk_ktq_hw)
+        return 0;
+    *ev = smk_ktq_h[smk_ktq_hr++ % 64u];
+    return 1;
+}
+void plat_smk_contacts(uint64_t *c1, uint64_t *c2) { *c1 = smk_kt_hc1; *c2 = smk_kt_hc2; }
 void plat_smk_volume(int pct) { master = (uint32_t)((pct < 0 ? 0 : pct > 100 ? 100 : pct) * 4096 / 100); }
 static int smk_k1_raw;                  /* (MB-1) K1 the app's knob: plat_smk_k1 (script: k1 N) */
 static int32_t smk_k1_acc;
@@ -2747,6 +2757,20 @@ int main(int argc, char **argv)
         } else if (!strcmp(cmd, "modw")) {          /* modw 0..127 */
             smk_mod = atoi(a), smk_wheel_new = 1;
             run_ms(10);
+        } else if (!strcmp(cmd, "ktev")) {           /* ktev KIND KEY VEL MS_TENTHS: a key-test event (PRESS RELEASE GRAZE HALF) */
+            static const char *const KTN[4] = {"PRESS", "RELEASE", "GRAZE", "HALF"};
+            int kind = find_name(KTN, 4, a), key = atoi(b), vel = atoi(c), dt = atoi(d);
+            if (kind < 0) {
+                printf("line %d: no key-test kind %s\n", lineno, a);
+                return 2;
+            }
+            smk_ktq_h[smk_ktq_hw++ % 64u] = (uint32_t)kind << 30 | (uint32_t)(key & 63) << 24 | (uint32_t)(vel & 127) << 17 |
+                                             (uint32_t)(dt & 0x1FFFF);
+            if (kind == 0)
+                smk_kt_hc1 |= 1ull << key, smk_kt_hc2 |= 1ull << key;
+            else if (kind == 1 || kind == 2)
+                smk_kt_hc1 &= ~(1ull << key), smk_kt_hc2 &= ~(1ull << key);
+            run_ms(2);
         } else if (!strcmp(cmd, "k1")) {             /* k1 N: knob K1 N detents (MASTER, or the app's while raw) */
             int n = atoi(a);
             if (smk_k1_raw)

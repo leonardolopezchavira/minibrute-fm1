@@ -119,6 +119,16 @@ void plat_leds(uint32_t buttons, uint32_t keys)
     plat_lights(buttons, keys, 0, 0, 0);
 }
 static uint32_t smk_btn_seen;
+int plat_smk_keytest(uint32_t *ev)
+{
+    uint32_t r = smk_ktq_r;
+    if (r == smk_ktq_w)
+        return 0;
+    *ev = smk_ktq[r % SMK_KTQ];
+    smk_ktq_r = r + 1u;
+    return 1;
+}
+void plat_smk_contacts(uint64_t *c1, uint64_t *c2) { *c1 = smk_kt_c1; *c2 = smk_kt_c2; }
 void plat_smk_volume(int pct) { smk_master = (pct < 0 ? 0 : pct > 100 ? 100 : pct) * 1023 / 100; }
 void plat_smk_k1_raw(int on) { smk_k1_raw = (uint8_t)(on != 0); smk_k1_acc = 0; }
 int32_t plat_smk_k1(void)

@@ -339,6 +339,7 @@ GLOBE = GLO, BT = SAVE, SEQ PLAY = PLAY, SEQ REC = REC), and it adds its own:
 | Volume | K1 on the pages; VOL at the foot of the screen; 50 % at power-on |
 | Keys | All 37 (C3..C6) with velocity; OCT- / OCT+ three octaves either way |
 | Wheels, pedal | Pitch bend, the mod wheel, sustain |
+| Key test | GLO pressed again: the keybed measured as you play (each key's two contacts, presses and the time between their contacts, grazes and half lifts that play no note, the fastest repeats, the last events); FX resets it |
 | Pads | The white keys; while the sequencer plays, its steps (16 at a time: the step playing orange, notes white, ties dim orange) |
 
 **The piano roll**: SEQ pressed a second time. The pattern by pitch, 16 steps at a time, its rows drawn as a

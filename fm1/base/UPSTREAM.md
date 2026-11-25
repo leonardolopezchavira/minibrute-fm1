@@ -9,4 +9,5 @@ here for SQ-80 are listed in SQ-80's git history; the SMK-37 board files say whe
 
 MB-1 (minibrute-fm1) adds, for the SMK-37: K1 as the app's knob (`plat_smk_k1_raw`, `plat_smk_k1` in
 `include/plat.h`; `bsp/boards/smk37/fm1_adc.h`, `device/plat_fm1.c`, and the simulator's `k1` command in
-`host/plat_host.c`). Off, K1 is MASTER as before. And `plat_smk_volume` (MASTER to a percentage: MB-1 starts at 50 %).
+`host/plat_host.c`). Off, K1 is MASTER as before. And `plat_smk_volume` (MASTER to a percentage: MB-1 starts at 50 %). And a key test for the SMK-37's keybed (`plat_smk_keytest`, `plat_smk_contacts`; measured in
+`bsp/boards/smk37/fm1_input.h`'s scan, which it never changes; the simulator's `ktev`).
