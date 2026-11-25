@@ -66,6 +66,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | ARP | ARP | MODE | OCTAVE | STEP | SWING |
 | ARP 2 | ARP (held) | ARP | TEMPO | HOLD ORD |  |
 | SEQ | SEQ | PATTERN | LENGTH | STEP | SWING |
+| PIANO ROLL | SEQ | NOTE | VELOCITY | STEP | TYPE |
 
 Each button is a section of the patch editor's sheet, and each page one of its columns or groups: SEL has a page
 for each waveform (its level, its shaper and the shaper's envelope amount), the SUB page the sub oscillator and noise.
@@ -165,6 +166,12 @@ LFO CLK on ARP.
 - **Recording in time**: while it plays, press **REC**. A key goes to the nearest step (the one playing, or the next
   if it is more than half over); held over the steps after, it writes ties. Press REC again to finish.
 - **Clearing**: **REC** held a second clears the pattern (all rests, 16 steps).
+- **The piano roll**: **SEQ** pressed a second time. The pattern by pitch, 16 steps at a time, its rows drawn as a
+  keyboard's (white keys' rows grey, black keys' dark, each C named), the whole screen below the header. **K3** picks a
+  step (the view follows it to steps 17-32 and on; one past the end adds a step), **K1** its note (a semitone a
+  detent; a rest becomes a note, heard as it changes), **K2** its velocity, **K4** NOTE / TIE / REST; **FX** deletes
+  it. With REC armed and the sequencer stopped, the next key, FX or FX with a key goes into the step picked. HOME goes
+  back. (On the SMK-37 the knobs are K5..K8 and the pads pick the step: below.)
 - **The range**: OCT- / OCT+ move the keys three octaves either way, so steps can be any note of an 88-key piano
   (A0..C8) and more.
 

@@ -1314,3 +1314,41 @@ expect seqlast 55
 tap PLAY
 wait 30
 expect seqrun 0
+# the piano roll on the FM-1: SEQ again; K3 picks the step (the view follows), K1 its note, K2 its velocity,
+# K4 NOTE / TIE / REST, FX deletes it
+tap HOME
+wait 30
+tap SEQ
+wait 30
+expect roll 0
+tap SEQ
+wait 30
+expect roll 1
+turn K3 1
+wait 30
+expect rollpick 1
+turn K3 -1
+wait 30
+expect rollpick 0
+expect sn1 60
+turn K1 3
+wait 30
+expect sn1 63
+turn K2 -2
+wait 30
+expect sv1 98
+turn K4 1
+wait 30
+expect st1 1
+turn K4 -1
+wait 30
+expect st1 0
+expect sv1 98
+tap FX
+wait 30
+expect sv1 0
+expect roll 1
+shot fm1_roll.png
+tap HOME
+wait 30
+expect roll 0
