@@ -50,9 +50,6 @@ static const page_t PAGE[] = {
 #else
     {"GLOBAL", B_GLO, {G_TEMPO, G_HORD, P_NONE, P_NONE}},
 #endif
-#if APP_SMK
-    {"KEY TEST", B_GLO, {P_NONE, P_NONE, P_NONE, P_NONE}},   /* (GLO again: the keybed measured) */
-#endif
     {"DIST", B_FX, {P_XTYPE, P_XDRV, P_XTONE, P_XMIX}},       {"CHORUS", B_FX, {P_CRATE, P_CDEPTH, P_CPHASE, P_CMIX}},
     {"DELAY", B_FX, {P_DTIME, P_DFB, P_DTONE, P_DMIX}},       {"DELAY 2", B_FX, {P_DSYNC, P_DMODE, P_NONE, P_NONE}},
     {"REVERB", B_FX, {P_RDECAY, P_RSIZE, P_RDAMP, P_RMIX}},   {"REVERB 2", B_FX, {P_RPRE, P_FXORD, P_NONE, P_NONE}},
@@ -1777,74 +1774,6 @@ static void pf_pads(void)
 /* the volume (MASTER: K1 on the pages), shown in the foot and, as it changes, at the top; 50 % at power-on */
 static uint32_t vol_pct(void) { return (plat_master() * 100u + 2048u) / 4096u; }
 
-/* The key test (GLO's second page): the keybed measured as it is played, to see what fast playing loses. Each press
- * (contact 1 to contact 2: the time its velocity comes from), each graze (contact 1 only: no note), each half lift
- * (lifted past contact 2 only and pressed again: no new note); the fastest repeat of one key and the fastest run
- * between two; the last events. FX on its page starts it again. */
-static struct {
-    uint32_t press, graze, half, release;
-    uint32_t played;                         /* notes the synth started from the keys (presses that sounded) */
-    uint32_t t_min, t_max, t_sum;            /* contact 1 to 2, 0.1 ms */
-    uint32_t rep_min, run_min;               /* ms between presses: one key again, any two */
-    uint32_t last_ms[SMK_NKEYBED], last_any; /* when (the scan's ms), | 1u<<31 once set */
-    uint32_t log[8];                         /* the last events (not the releases), newest first */
-    uint32_t nlog;
-} kt;
-
-static int ktest_page(void)                  /* the page after GLOBAL (no strcmp on the device) */
-{
-    const char *t = PAGE[set.page].title;
-    return t[0] == 'K' && t[1] == 'E' && t[2] == 'Y' && t[3] == ' ';
-}
-static void kt_reset(void)
-{
-    uint32_t k;
-    kt.press = kt.graze = kt.half = kt.release = kt.played = 0;
-    kt.t_min = 0xFFFFFFFFu, kt.t_max = kt.t_sum = 0;
-    kt.rep_min = kt.run_min = 0xFFFFFFFFu;
-    for (k = 0; k < SMK_NKEYBED; k++)
-        kt.last_ms[k] = 0;
-    kt.last_any = 0;
-    kt.nlog = 0;
-}
-static void kt_take(void)                     /* the scan's events (main loop) */
-{
-    uint32_t ev, now;
-    while (plat_smk_keytest(&ev, &now)) {   /* now: when the scan saw it, not when it is read here */
-        uint32_t kind = ev >> 30, key = (ev >> 24) & 63u, dt = ev & 0x1FFFFu, j;
-        if (key >= SMK_NKEYBED)
-            continue;
-        if (kind == PLAT_KT_RELEASE) {
-            kt.release++;
-            continue;
-        }
-        if (kind == PLAT_KT_PRESS) {
-            kt.press++;
-            kt.t_sum += dt;
-            kt.t_min = dt < kt.t_min ? dt : kt.t_min;
-            kt.t_max = dt > kt.t_max ? dt : kt.t_max;
-            now &= 0x7FFFFFFFu;
-            if (kt.last_ms[key] && ((now - kt.last_ms[key]) & 0x7FFFFFFFu) < kt.rep_min)
-                kt.rep_min = (now - kt.last_ms[key]) & 0x7FFFFFFFu;
-            if (kt.last_any && ((now - kt.last_any) & 0x7FFFFFFFu) < kt.run_min && ((now - kt.last_any) & 0x7FFFFFFFu))
-                kt.run_min = (now - kt.last_any) & 0x7FFFFFFFu;
-            kt.last_ms[key] = now | 1u << 31;
-            kt.last_any = now | 1u << 31;
-        } else if (kind == PLAT_KT_GRAZE) {
-            kt.graze++;
-        } else {
-            kt.half++;
-        }
-        for (j = 7u; j > 0u; j--)
-            kt.log[j] = kt.log[j - 1u];
-        kt.log[0] = ev;
-        if (kt.nlog < 8u)
-            kt.nlog++;
-        if (ktest_page())
-            ui.redraw = 1;
-    }
-}
-
 static int outer_held(void)                  /* an outer key held (step entry: FX with it, a tie) */
 {
     uint32_t k;
@@ -1856,8 +1785,6 @@ static int outer_held(void)                  /* an outer key held (step entry: F
 
 static void smk_note(uint32_t note, uint32_t vel)
 {
-    if (vel)
-        kt.played++;
     post(vel ? Q_ON : Q_OFF, note, vel);
     plat_midi_send(vel ? 0x09u | 0x90u << 8 | note << 16 | vel << 24 : 0x08u | 0x80u << 8 | note << 16, TO_USB | TO_BLE);
 }
@@ -1897,16 +1824,6 @@ static void smk_input(void)
     }
     pf_faders();
     pf_pads();
-    kt_take();
-    if (ktest_page()) {                       /* (the contacts drawn live) */
-        static uint64_t c1w, c2w;
-        uint64_t c1, c2;
-        plat_smk_contacts(&c1, &c2);
-        if (c1 != c1w || c2 != c2w) {
-            c1w = c1, c2w = c2;
-            ui.redraw = 1;
-        }
-    }
     {
         static uint32_t vol_was = 0xFFu;
         uint32_t v = vol_pct();
@@ -2009,9 +1926,6 @@ static void input(void)
 #endif
             ui.vel[k] = (uint8_t)v;
             key_strikes++;
-#if APP_SMK
-            kt.played++;
-#endif
             if (seq_rec && !seq_running) {   /* step entry: the key's note */
                 seq_step_write((uint32_t)note, v ? v : 1u, 0);
                 seq_key_note = note;
@@ -2070,13 +1984,6 @@ static void input(void)
         }
         else if (k == B_FX && set.page == PG_ROLL && !(seq_rec && !seq_running))   /* the piano roll: deleted */
             roll_delete();
-#if APP_SMK
-        else if (k == B_FX && ktest_page()) {   /* the key test: from nothing again */
-            kt_reset();
-            app_say("KEY TEST", "RESET");
-            ui.redraw = 1;
-        }
-#endif
         else if (k == B_FX && seq_rec && !seq_running)   /* step entry: a rest, or with a key held a tie */
             seq_step_write((keys || OUTER_HELD()) && seq_key_note >= 0 ? (uint32_t)seq_key_note : 60u, 0,
                            (keys || OUTER_HELD()) && seq_key_note >= 0 ? SF_TIE : 0u);
@@ -2548,115 +2455,6 @@ static void draw(void)
         return;
     }
 #if APP_SMK
-    if (ktest_page()) {                      /* the key test: the keybed's contacts, counts, the last events */
-      uint32_t pass;
-      static const uint8_t BLK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-      static const char *const KIND[4] = {"PRESS", "RELEASE", "GRAZE", "HALF"};
-      for (pass = 0; pass < 2u; pass++) {
-        uint64_t c1, c2;
-        uint32_t k, wx = 0;
-        char o[12];
-        if (pass) {
-            cv_begin(240, 68, C_BLACK);
-            cv_oy = -136;
-            cv_y0 = 0;
-            cv_y1 = 68;
-        }
-        plat_smk_contacts(&c1, &c2);
-        cv_text(4, 0, &FONT_XS, "KEY TEST", C_ACCENT);
-        cv_text(236 - text_w(&FONT_XS, "FX: RESET"), 0, &FONT_XS, "FX: RESET", C_GRAY);
-        for (k = 0; k < SMK_NKEYBED; k++)    /* the white keys: grey, orange at contact 2, dim at contact 1 only */
-            if (!BLK[k % 12u]) {
-                uint16_t c = (c2 >> k) & 1u ? C_ACCENT : (c1 >> k) & 1u ? C_AMB : C_GRAY;
-                cv_rect(10 + (int32_t)wx * 10, 14, 9, 40, c);
-                wx++;
-            }
-        for (k = 0, wx = 0; k < SMK_NKEYBED; k++) {   /* the black keys over them */
-            if (!BLK[k % 12u]) {
-                wx++;
-                continue;
-            }
-            cv_rect(10 + (int32_t)wx * 10 - 4, 14, 7, 24,
-                    (c2 >> k) & 1u ? C_ACCENT : (c1 >> k) & 1u ? C_AMB : C_LINE);
-        }
-        cv_text(10, 56, &FONT_XS, "C3", C_DIM);
-        cv_text(226 - text_w(&FONT_XS, "C6"), 56, &FONT_XS, "C6", C_DIM);
-        t[0] = 0;                            /* the counts */
-        text_cat(t, "PRESSES ");
-        int_text((int32_t)kt.press, o);
-        text_cat(t, o);
-        cv_text(4, 70, &FONT_XS, t, C_WHITE);
-        t[0] = 0;
-        text_cat(t, "GRAZES ");
-        int_text((int32_t)kt.graze, o);
-        text_cat(t, o);
-        cv_text(92, 70, &FONT_XS, t, kt.graze ? C_ACCENT : C_GRAY);
-        t[0] = 0;
-        text_cat(t, "HALF LIFTS ");
-        int_text((int32_t)kt.half, o);
-        text_cat(t, o);
-        cv_text(160, 70, &FONT_XS, t, kt.half ? C_ACCENT : C_GRAY);
-        {   /* contact 1 to 2 (the velocity's time), the fastest repeat and run */
-            char a[8], b[8], c[8];
-            uint32_t avg = kt.press ? kt.t_sum / kt.press : 0u;
-            if (kt.press) {
-                int_text((int32_t)(kt.t_min / 10u), a); text_cat(a, "."); int_text((int32_t)(kt.t_min % 10u), o); text_cat(a, o);
-                int_text((int32_t)(avg / 10u), b); text_cat(b, "."); int_text((int32_t)(avg % 10u), o); text_cat(b, o);
-                int_text((int32_t)(kt.t_max / 10u), c); text_cat(c, "."); int_text((int32_t)(kt.t_max % 10u), o); text_cat(c, o);
-            } else {
-                a[0] = b[0] = c[0] = '-', a[1] = b[1] = c[1] = 0;
-            }
-            t[0] = 0;
-            text_cat(t, "CONTACT 1-2 MS  MIN ");
-            text_cat(t, a);
-            text_cat(t, " AVG ");
-            text_cat(t, b);
-            text_cat(t, " MAX ");
-            text_cat(t, c);
-            cv_text(4, 84, &FONT_XS, t, C_GRAY);
-        }
-        t[0] = 0;
-        text_cat(t, "FASTEST  SAME KEY ");
-        if (kt.rep_min != 0xFFFFFFFFu) { int_text((int32_t)kt.rep_min, o); text_cat(t, o); text_cat(t, " MS"); } else text_cat(t, "-");
-        text_cat(t, "  ANY ");
-        if (kt.run_min != 0xFFFFFFFFu) { int_text((int32_t)kt.run_min, o); text_cat(t, o); text_cat(t, " MS"); } else text_cat(t, "-");
-        cv_text(4, 98, &FONT_XS, t, C_GRAY);
-        t[0] = 0;                            /* what the synth played of them: fewer, lost after the scan */
-        text_cat(t, "PLAYED ");
-        int_text((int32_t)kt.played, o);
-        text_cat(t, o);
-        text_cat(t, " OF ");
-        int_text((int32_t)kt.press, o);
-        text_cat(t, o);
-        cv_text(4, 112, &FONT_XS, t, kt.played < kt.press ? C_ACCENT : C_WHITE);
-        for (k = 0; k < kt.nlog && k < 7u; k++) {   /* the last events, newest first */
-            uint32_t ev = kt.log[k], kind = ev >> 30, key = (ev >> 24) & 63u, dt = ev & 0x1FFFFu, vel = (ev >> 17) & 127u;
-            int32_t y = 126 + (int32_t)k * 11, x;
-            note_name(48 + (int32_t)key, o);
-            cv_text(4, y, &FONT_XS, o, C_WHITE);
-            cv_text(34, y, &FONT_XS, KIND[kind], kind == PLAT_KT_PRESS ? C_GRAY : C_ACCENT);
-            t[0] = 0;
-            int_text((int32_t)(dt / 10u), o);
-            text_cat(t, o);
-            text_cat(t, ".");
-            int_text((int32_t)(dt % 10u), o);
-            text_cat(t, o);
-            text_cat(t, " MS");
-            x = cv_text(92, y, &FONT_XS, t, C_GRAY);
-            t[0] = 0;
-            if (kind == PLAT_KT_PRESS) {
-                text_cat(t, "VEL ");
-                int_text((int32_t)vel, o);
-                text_cat(t, o);
-            } else {
-                text_cat(t, "NO NOTE");
-            }
-            cv_text(x + 10, y, &FONT_XS, t, kind == PLAT_KT_PRESS ? C_DIM : C_ACCENT);
-        }
-        blit_poll(0, pass ? 172u : 36u);
-      }
-        return;
-    }
     if (pf.on && PAGE[set.page].btn != B_SEQ) {   /* the SMK-37's panel: the eight knobs, the four faders (the foot
                                               * without its scope, for room) */
         short_foot = 1;
@@ -2830,7 +2628,6 @@ void app_ui_init(void)
 #if APP_SMK
     plat_smk_k1_raw(pf.on);                  /* (the panel at power-on: K1 a knob of it) */
     plat_smk_volume(50);                     /* (the volume at power-on: half) */
-    kt_reset();
 #endif
     lcd_fill(0, 0, 240, 240, C_BLACK);
     ui.redraw = 1;
@@ -2893,18 +2690,6 @@ int app_expect(const char *what, int *got)
         *got = (int)(key_strikes - strikes_base);
     else if (!strcmp(what, "velsens"))      /* GLOBAL VEL SENS: 1 YES, 0 NO */
         *got = set.g[G_KEYS - NP] == 0u;
-    else if (!strcmp(what, "ktpress"))
-        *got = (int)kt.press;
-    else if (!strcmp(what, "ktplayed"))
-        *got = (int)kt.played;
-    else if (!strcmp(what, "ktrep"))         /* the fastest repeat of one key, ms */
-        *got = (int)kt.rep_min;
-    else if (!strcmp(what, "ktgraze"))
-        *got = (int)kt.graze;
-    else if (!strcmp(what, "kthalf"))
-        *got = (int)kt.half;
-    else if (!strcmp(what, "ktpage"))
-        *got = ktest_page();
     else if (!strcmp(what, "vol"))
         *got = (int)vol_pct();
 #endif

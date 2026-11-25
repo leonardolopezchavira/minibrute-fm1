@@ -9,5 +9,4 @@ here for SQ-80 are listed in SQ-80's git history; the SMK-37 board files say whe
 
 MB-1 (minibrute-fm1) adds, for the SMK-37: K1 as the app's knob (`plat_smk_k1_raw`, `plat_smk_k1` in
 `include/plat.h`; `bsp/boards/smk37/fm1_adc.h`, `device/plat_fm1.c`, and the simulator's `k1` command in
-`host/plat_host.c`). Off, K1 is MASTER as before. And `plat_smk_volume` (MASTER to a percentage: MB-1 starts at 50 %). And `plat_smk_velocity` (the SMK-37's keys velocity sensitive or not: a note at contact 1) and `plat_smk_restrikes` (a key half lifted and struck again plays again; outer keys as a release and a press). And a key test for the SMK-37's keybed (`plat_smk_keytest`, `plat_smk_contacts`; measured in
-`bsp/boards/smk37/fm1_input.h`'s scan, which it never changes; the simulator's `ktev`).
+`host/plat_host.c`). Off, K1 is MASTER as before. And `plat_smk_volume` (MASTER to a percentage: MB-1 starts at 50 %). And `plat_smk_velocity` (the SMK-37's keys velocity sensitive or not: a note at contact 1), repetition in `bsp/boards/smk37/fm1_input.h`'s scan (a key half lifted and struck again plays again: a press edge again; outer keys as a release and a press), and `plat_smk_key_hits` (note keys pressed since the last call, even if let go before it: the simulator's `ktap`, `krs`).
