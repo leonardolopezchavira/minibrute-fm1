@@ -12,12 +12,12 @@ enum { T_LVL, T_BIP, T_KBD, T_CUT, T_ATT, T_DR, T_LFO, T_PW, T_USR, T_VIB, T_GLI
        T_DTIME, T_DTONE, T_RDEC, T_RSIZE, T_RPRE, T_XDRV, T_XTONE, T_CRATE, T_CDEPTH, T_CPHASE, T_KTHR, T_KRAT,
        T_KATT, T_KREL, T_MODE, T_LWAVE, T_VTYPE, T_WDEST,
        T_SUBOCT, T_SUBSHP, T_PLAY, T_BEND, T_ONOFF, T_ARP, T_AMODE, T_AOCT, T_ASTEP, T_ASWING, T_HORD,
-       T_LSYNC, T_TEMPO, T_SPAT, T_SLEN, T_DSYNC, T_DMODE, T_FXORD, T_XTYPE };
+       T_LSYNC, T_TEMPO, T_SPAT, T_SLEN, T_DSYNC, T_DMODE, T_FXORD, T_XTYPE, T_KEYS };
 static const uint8_t ENUM_N[] = {[T_MODE] = 4, [T_LWAVE] = 6, [T_VTYPE] = 3, [T_WDEST] = 3, [T_SUBOCT] = 2,
                                  [T_SUBSHP] = 2, [T_PLAY] = 2, [T_BEND] = 12, [T_ONOFF] = 2,
                                  [T_ARP] = 3, [T_AMODE] = 4, [T_AOCT] = 4, [T_ASTEP] = 6, [T_ASWING] = 6, [T_HORD] = 2,
                                  [T_LSYNC] = 2, [T_TEMPO] = 231, [T_SPAT] = 8, [T_SLEN] = 64,
-                                 [T_DSYNC] = 2, [T_DMODE] = 2, [T_FXORD] = 2, [T_XTYPE] = 4};
+                                 [T_DSYNC] = 2, [T_DMODE] = 2, [T_FXORD] = 2, [T_XTYPE] = 4, [T_KEYS] = 2};
 static const char *const MODE_NAME[] = {"LP", "BP", "HP", "NOTCH"};
 static const char *const LWAVE_NAME[] = {"SINE", "TRI", "SAW", "SQUARE", "S&H", "SMOOTH"};
 static const char *const VTYPE_NAME[] = {"-SQR", "SINE", "+SQR"};
@@ -31,6 +31,7 @@ static const char *const AMODE_NAME[] = {"UP", "DOWN", "UP/DOWN", "RANDOM"};
 static const char *const AOCT_NAME[] = {"1 OCT", "2 OCT", "3 OCT", "4 OCT"};
 static const char *const ASTEP_NAME[] = {"1/4", "1/8", "1/16", "1/4T", "1/8T", "1/16T"};
 static const char *const HORD_NAME[] = {"PITCH", "PLAYED"};
+static const char *const KEYS_NAME[] = {"YES", "NO"};   /* (the SMK-37's keys: GLOBAL VEL SENS, VELOCITY SENSITIVE) */
 static const char *const LSYNC_NAME[] = {"FREE", "ARP"};
 static const char *const DSYNC_NAME[] = {"FREE", "CLOCK"};
 static const char *const DMODE_NAME[] = {"STEREO", "PING-PONG"};
@@ -54,7 +55,7 @@ enum { P_CUT, P_RES, P_BRUTE, P_FENV, P_MODE, P_KBD, P_FVEL, P_AVEL,
 /* the instrument's settings (not a patch's): the tempo, the Hold order, the LFO's clock, and the sequencer's
  * pattern, length, step and swing; numbered after the patch's parameters. (The arpeggiator's Off/On/Hold, Mode,
  * Octave, Step and Swing are the patch's, as in the plugin.) */
-enum { G_TEMPO = NP, G_HORD, G_LSYNC, G_SPAT, G_SLEN, G_SSTEP, G_SSWING, G_END };
+enum { G_TEMPO = NP, G_HORD, G_LSYNC, G_SPAT, G_SLEN, G_SSTEP, G_SSWING, G_KEYS, G_END };
 #define NG (G_END - NP)
 
 typedef struct {
@@ -98,6 +99,7 @@ static const param_t GPARAM[NG] = {
     [G_TEMPO - NP] = {"TEMPO", T_TEMPO, 0},
     [G_HORD - NP] = {"HOLD ORD", T_HORD, 0},   [G_LSYNC - NP] = {"LFO CLK", T_LSYNC, 0},
     [G_SPAT - NP] = {"PATTERN", T_SPAT, 0},    [G_SLEN - NP] = {"LENGTH", T_SLEN, 0},
+    [G_KEYS - NP] = {"VEL SENS", T_KEYS, 0},
 };
 static const param_t *pinfo(uint32_t i) { return i < NP ? &PARAM[i] : &GPARAM[(i - NP) % NG]; }
 static int is_enum(uint32_t t) { return t >= T_MODE && t != T_TEMPO && t != T_SLEN; }
@@ -411,6 +413,9 @@ static void mb_value_text(uint32_t i, uint32_t x, int lsync, int dsync, char *b)
         break;
     case T_HORD:
         text_cat(b, HORD_NAME[x & 1u]);
+        break;
+    case T_KEYS:
+        text_cat(b, KEYS_NAME[x & 1u]);
         break;
     case T_LSYNC:
         text_cat(b, LSYNC_NAME[x & 1u]);

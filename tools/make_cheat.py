@@ -228,7 +228,7 @@ page = f"""<!DOCTYPE html>
         <tr><th>KNOB BANK</th><td>the knobs as on the FM-1: K1 volume, K2 SELECT, K3 ALGO, K4 PRESET, K5&ndash;K8 the page's four</td></tr>
         <tr><th>FADER BANK</th><td>the faders' bank, A&ndash;D (lit past A)</td></tr>
         <tr><th>&lt; &gt;</th><td>the patch before, the next</td></tr>
-        <tr><th>Keys</th><td>37 with velocity, C3&ndash;C6; OCTAVE &minus;/+ three octaves either way</td></tr>
+        <tr><th>Keys</th><td>37 with velocity, C3&ndash;C6; OCTAVE &minus;/+ three octaves either way; GLOBAL K8 VEL SENS NO: no velocity, faster; a key half lifted plays again</td></tr>
         <tr><th>Wheels &middot; pedal</th><td>pitch bend &middot; mod wheel &middot; sustain</td></tr>
         <tr><th>Buttons</th><td>PATCH = HOME (&times;3: RANDOM) &middot; SCALE = SEL &middot; CHORD = ENV &middot; NOTE REPEAT = LFO &middot;
           PARA = EDIT &middot; GLOBE = GLO &middot; BT = SAVE &middot; SEQ PLAY = PLAY &middot; SEQ REC = REC</td></tr>

@@ -129,6 +129,16 @@ int plat_smk_keytest(uint32_t *ev)
     return 1;
 }
 void plat_smk_contacts(uint64_t *c1, uint64_t *c2) { *c1 = smk_kt_c1; *c2 = smk_kt_c2; }
+void plat_smk_velocity(int on) { smk_novel = on ? 0u : 1u; }
+uint32_t plat_smk_restrikes(void)
+{
+    uint32_t r;
+    __disable_irq();
+    r = smk_restrike;
+    smk_restrike = 0;
+    __enable_irq();
+    return r;
+}
 void plat_smk_volume(int pct) { smk_master = (pct < 0 ? 0 : pct > 100 ? 100 : pct) * 1023 / 100; }
 void plat_smk_k1_raw(int on) { smk_k1_raw = (uint8_t)(on != 0); smk_k1_acc = 0; }
 int32_t plat_smk_k1(void)

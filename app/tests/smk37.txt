@@ -323,6 +323,29 @@ restore out:s.mb1
 wait 300
 expect restore_rc 0
 expect seqnotes 1
+# GLOBAL K4, VEL SENS: YES (velocity) at power-on, NO plays at contact 1; repetition re-strikes a held key
+tap HOME
+wait 30
+tap GLO
+wait 30
+expect velsens 1
+turn K4 1
+wait 60
+expect velsens 0
+shot smk_velsens.png
+key 7 down 100
+wait 60
+expect strikes_base 0
+krs 7
+wait 60
+krs 7
+wait 60
+key 7 up
+wait 300
+expect strikesdelta 2
+turn K4 -1
+wait 60
+expect velsens 1
 # the key test: GLO again; the scan's events counted (ktev stands in for the keybed), FX resets
 tap HOME
 wait 30

@@ -329,6 +329,10 @@ int plat_smk_keytest(uint32_t *ev)
     return 1;
 }
 void plat_smk_contacts(uint64_t *c1, uint64_t *c2) { *c1 = smk_kt_hc1; *c2 = smk_kt_hc2; }
+static int smk_vel_h = 1;
+static uint32_t smk_rs_h;
+void plat_smk_velocity(int on) { smk_vel_h = on != 0; }
+uint32_t plat_smk_restrikes(void) { uint32_t r = smk_rs_h; smk_rs_h = 0; return r; }
 void plat_smk_volume(int pct) { master = (uint32_t)((pct < 0 ? 0 : pct > 100 ? 100 : pct) * 4096 / 100); }
 static int smk_k1_raw;                  /* (MB-1) K1 the app's knob: plat_smk_k1 (script: k1 N) */
 static int32_t smk_k1_acc;
@@ -2771,6 +2775,9 @@ int main(int argc, char **argv)
             else if (kind == 1 || kind == 2)
                 smk_kt_hc1 &= ~(1ull << key), smk_kt_hc2 &= ~(1ull << key);
             run_ms(2);
+        } else if (!strcmp(cmd, "krs")) {            /* krs K: note key K (0 = F3), held, struck again (repetition) */
+            smk_rs_h |= 1u << (atoi(a) & 31);
+            run_ms(10);
         } else if (!strcmp(cmd, "k1")) {             /* k1 N: knob K1 N detents (MASTER, or the app's while raw) */
             int n = atoi(a);
             if (smk_k1_raw)

@@ -360,6 +360,29 @@ static void smk__key_event(uint32_t k, uint32_t vel)     /* vel 0 = release */
         fm1_in.keys &= ~((uint64_t)1u << k);
 }
 
+/* (MB-1) how the keys play: smk_novel 0, velocity sensitive (a note at contact 2, its velocity the time from contact
+ * 1, as the stock firmware); 1, not (a note at contact 1, the top of the travel, at SMK_NOVEL_VEL: no press is too
+ * light to play, and each sounds earlier). Either way, repetition: a key down that lifts past contact 2 only (2 frames
+ * or more open, not a bounce) and goes down again plays again (its last velocity, or SMK_NOVEL_VEL), where the stock
+ * scan waited for contact 1 to open too. A re-struck note key is latched in smk_restrike (the app: plat_smk_restrikes),
+ * an outer key's goes out as a release and a press. */
+#define SMK_NOVEL_VEL 100u
+static volatile uint8_t smk_novel;
+static volatile uint32_t smk_restrike;             /* note keys (bit n = note key n, F3 = 0) struck again while down */
+static uint8_t smk_rs_open[FM1_NKEY], smk_rs_c2[FM1_NKEY];
+static void smk__restrike(uint32_t k, uint32_t vel)
+{
+    fm1_in.key_vel[k] = (uint8_t)vel;
+    if (k >= SMK_KEY_F3 && k < SMK_KEY_F3 + 27u) {
+        smk_restrike |= 1u << (k - SMK_KEY_F3);
+        fm1_in.notes_pressed |= 1u << (k - SMK_KEY_F3);
+    } else {
+        smk__extq(k, 0);
+        smk__extq(k, vel);
+    }
+    fm1_in.keys_pressed |= (uint64_t)1u << k;
+}
+
 static void smk__keys(uint32_t now)
 {
     uint32_t k;
@@ -370,13 +393,26 @@ static void smk__keys(uint32_t now)
         c2 |= (uint64_t)(s >> 1) << k;
         if (s == 2u)                                      /* contact 2 without 1: treat as 1 then 2 */
             s = 3u;
-        if (st == 3u) {                                   /* (the key test: a half lift, contact 2 open, 1 not) */
-            if (s == 1u && !smk_kt_half[k]) {
-                smk_kt_half[k] = 1;
-                smk_kt_t2[k] = now;
-            } else if (s == 3u && smk_kt_half[k]) {
-                smk_kt_half[k] = 0;
-                smk__kt(SMK_KT_HALF, k, 0, now - smk_kt_t2[k]);
+        if (st == 3u) {                                   /* down: contact 2 lifted, and down again (repetition) */
+            if (s == 1u) {
+                if (!smk_kt_half[k]) {
+                    smk_kt_half[k] = 1;
+                    smk_kt_t2[k] = now;
+                }
+                if (smk_rs_c2[k] && smk_rs_open[k] < 255u)
+                    smk_rs_open[k]++;
+            } else if (s == 3u) {
+                if (smk_kt_half[k]) {
+                    smk_kt_half[k] = 0;
+                    if (smk_rs_c2[k] && smk_rs_open[k] >= 2u) {   /* struck again */
+                        smk__restrike(k, smk_novel ? SMK_NOVEL_VEL : fm1_in.key_vel[k]);
+                        smk__kt(SMK_KT_PRESS, k, fm1_in.key_vel[k], now - smk_kt_t2[k]);
+                    } else {                              /* (a bounce of contact 2: nothing) */
+                        smk__kt(SMK_KT_HALF, k, 0, now - smk_kt_t2[k]);
+                    }
+                }
+                smk_rs_open[k] = 0;
+                smk_rs_c2[k] = 1;
             }
         }
         if (s == st) {
@@ -395,11 +431,23 @@ static void smk__keys(uint32_t now)
                 smk__kt(SMK_KT_GRAZE, k, 0, now - fm1_in.ks_t1[k]);
             }
             smk_kt_half[k] = 0;
+            smk_rs_open[k] = 0;
+            smk_rs_c2[k] = 0;
             continue;
         }
         fm1_in.ks_rel[k] = 0;
         if (st == 0u)
             fm1_in.ks_t1[k] = now;                        /* contact 1 made (or both in one frame) */
+        if (st == 0u && smk_novel) {                      /* not velocity sensitive: the note at contact 1 */
+            smk__key_event(k, SMK_NOVEL_VEL);
+            smk__kt(SMK_KT_PRESS, k, SMK_NOVEL_VEL, 0);
+            smk_kt_t2[k] = now;
+            smk_kt_half[k] = 0;
+            smk_rs_open[k] = 0;
+            smk_rs_c2[k] = s == 3u;
+            fm1_in.ks_stab[k] = 3;
+            continue;
+        }
         if (s == 3u && st != 3u) {                        /* contact 2 made: the note, timed from contact 1 */
             uint32_t T = 10u + (now - fm1_in.ks_t1[k]) / (100u * FM1_TICKS_PER_US);   /* stock 0.1 ms frames */
             uint32_t x = T <= 0x3FEu ? 0x3FFu - T : 1u;
@@ -407,6 +455,8 @@ static void smk__keys(uint32_t now)
             smk__kt(SMK_KT_PRESS, k, fm1_in.key_vel[k], now - fm1_in.ks_t1[k]);
             smk_kt_t2[k] = now;
             smk_kt_half[k] = 0;
+            smk_rs_open[k] = 0;
+            smk_rs_c2[k] = 1;
         }
         if (s == 1u && st == 3u)                          /* 3 -> 1: still down */
             continue;

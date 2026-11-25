@@ -45,7 +45,11 @@ static const page_t PAGE[] = {
     {"LFO", B_LFO, {P_LRATE, P_LWAVE, P_LRTRG, P_NONE}},      {"LFO AMT", B_LFO, {P_LPITCH, P_LFILT, P_LPWM, P_LAMP}},
     {"VIBRATO", B_LFO, {P_VRATE, P_VTYPE, P_NONE, P_NONE}},
     {"PLAY", B_EDIT, {P_PLAY, P_GLIDE, P_BEND, P_VINT}},      {"CONTROLS", B_EDIT, {P_WDEST, P_WAMT, P_ATVIB, P_ATCUT}},
+#if APP_SMK
+    {"GLOBAL", B_GLO, {G_TEMPO, G_HORD, G_LSYNC, G_KEYS}},   /* (the SMK-37: VELOCITY SENSITIVE, YES or NO) */
+#else
     {"GLOBAL", B_GLO, {G_TEMPO, G_HORD, G_LSYNC, P_NONE}},
+#endif
 #if APP_SMK
     {"KEY TEST", B_GLO, {P_NONE, P_NONE, P_NONE, P_NONE}},   /* (GLO again: the keybed measured) */
 #endif
@@ -131,7 +135,7 @@ static uint32_t pget(uint32_t i)
     return i < NP ? set.cur.v[i] : set.g[(i - NP) % NG];
 }
 static const uint8_t G_DEF[NG] = {[G_TEMPO - NP] = 90, [G_HORD - NP] = 0, [G_LSYNC - NP] = 0, [G_SPAT - NP] = 0,
-                                  [G_SLEN - NP] = 0, [G_SSTEP - NP] = 2, [G_SSWING - NP] = 0};
+                                  [G_SLEN - NP] = 0, [G_SSTEP - NP] = 2, [G_SSWING - NP] = 0, [G_KEYS - NP] = 0};
 
 static volatile float arp_bpm = 120.0f;     /* the arpeggiator's tempo now (the knob, a tap or MIDI clock) */
 static void params_from(const uint8_t *v, MBParams *p)
@@ -1126,6 +1130,8 @@ static void param_set(uint32_t i, int32_t v)
         set_dirty = 1;
         if (i == G_LSYNC || (i == G_TEMPO && set.g[G_LSYNC - NP]))
             params_stale = 1;
+        if (i == G_KEYS)
+            app_say("VELOCITY SENSITIVE", v ? "NO" : "YES");
         ui.redraw = 1;
         return;
     }
@@ -1952,6 +1958,10 @@ static void smk_input(void)
 }
 #endif
 
+static uint32_t key_strikes;                 /* (the host's tests) keys struck, repetition included */
+#if APP_SMK
+static uint32_t strikes_base;
+#endif
 static void input(void)
 {
     uint32_t keys, btn = plat_buttons(), k, at = 0;
@@ -1961,6 +1971,19 @@ static void input(void)
     smk_input();
 #endif
     keys = touch_keys();
+#if APP_SMK
+    plat_smk_velocity(set.g[G_KEYS - NP] == 0u);   /* GLOBAL VEL SENS: YES (0) or NO (1) */
+    {                                        /* a key struck again while down (repetition): off, then on again */
+        uint32_t rs = plat_smk_restrikes() & keys & ui.keys;
+        for (k = 0; k < NKEYS; k++)
+            if (rs & (1u << k)) {
+                int32_t note = 53 + (int32_t)k + 12 * set.octave;
+                post(Q_OFF, (uint32_t)note, 0);
+                plat_midi_send(0x08u | 0x80u << 8 | (uint32_t)note << 16, TO_USB | TO_BLE);
+                ui.keys &= ~(1u << k);
+            }
+    }
+#endif
     for (k = 0; k < NKEYS; k++) {            /* key 0 is F3 (MIDI 53) */
         uint32_t bit = 1u << k, v;
         int32_t note = 53 + (int32_t)k + 12 * set.octave;
@@ -1973,6 +1996,7 @@ static void input(void)
             v = touch_vel(k);
 #endif
             ui.vel[k] = (uint8_t)v;
+            key_strikes++;
             if (seq_rec && !seq_running) {   /* step entry: the key's note */
                 seq_step_write((uint32_t)note, v ? v : 1u, 0);
                 seq_key_note = note;
@@ -2839,6 +2863,13 @@ int app_expect(const char *what, int *got)
         *got = pf.bank;
     else if (!strncmp(what, "caught", 6))
         *got = pf.caught[(what[6] - '0') & 3];
+    else if (!strcmp(what, "strikes_base")) {   /* the count from here: strikesdelta */
+        strikes_base = key_strikes;
+        *got = 0;
+    } else if (!strcmp(what, "strikesdelta"))
+        *got = (int)(key_strikes - strikes_base);
+    else if (!strcmp(what, "velsens"))      /* GLOBAL VEL SENS: 1 YES, 0 NO */
+        *got = set.g[G_KEYS - NP] == 0u;
     else if (!strcmp(what, "ktpress"))
         *got = (int)kt.press;
     else if (!strcmp(what, "ktgraze"))

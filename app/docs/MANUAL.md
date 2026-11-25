@@ -55,7 +55,7 @@ wheel, the keys' pressure (aftertouch), the octave, the audio load (CPU: now, PE
 | VIBRATO | LFO | VIB RATE | VIB TYPE |  |  |
 | PLAY | EDIT | PLAY | GLIDE | BEND | VINTAGE |
 | CONTROLS | EDIT | WHEEL TO | WHL AMT | AT VIB | AT CUT |
-| GLOBAL | GLO | TEMPO | HOLD ORD | LFO CLK |  |
+| GLOBAL | GLO | TEMPO | HOLD ORD | LFO CLK | VEL SENS (SMK-37) |
 | DIST | FX | TYPE | DRIVE | TONE | MIX |
 | CHORUS | FX | RATE | DEPTH | STEREO | MIX |
 | DELAY | FX | TIME | FEEDBACK | TONE | MIX |
@@ -339,7 +339,8 @@ GLOBE = GLO, BT = SAVE, SEQ PLAY = PLAY, SEQ REC = REC), and it adds its own:
 | Volume | K1 on the pages; VOL at the foot of the screen; 50 % at power-on |
 | Keys | All 37 (C3..C6) with velocity; OCT- / OCT+ three octaves either way |
 | Wheels, pedal | Pitch bend, the mod wheel, sustain |
-| Key test | GLO pressed again: the keybed measured as you play (each key's two contacts, presses and the time between their contacts, grazes and half lifts that play no note, the fastest repeats, the last events); FX resets it |
+| Key test | GLO pressed again: the keybed measured as you play (each key's two contacts, presses and the time between their contacts, grazes that play no note, half lifts, the fastest repeats, the last events); FX resets it |
+| VEL SENS | GLOBAL K8, VELOCITY SENSITIVE: YES (at power-on), notes as loud as they're struck, at the bottom of the travel; NO, every note the same, at the top of the travel (no light touch lost, each sounds sooner). Either way, a key lifted part way and struck again plays again (repetition) |
 | Pads | The white keys; while the sequencer plays, its steps (16 at a time: the step playing orange, notes white, ties dim orange) |
 
 **The piano roll**: SEQ pressed a second time. The pattern by pitch, 16 steps at a time, its rows drawn as a
