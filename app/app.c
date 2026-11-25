@@ -1790,7 +1790,11 @@ static struct {
     uint32_t nlog;
 } kt;
 
-static int ktest_page(void) { return !strcmp(PAGE[set.page].title, "KEY TEST"); }
+static int ktest_page(void)                  /* the page after GLOBAL (no strcmp on the device) */
+{
+    const char *t = PAGE[set.page].title;
+    return t[0] == 'K' && t[1] == 'E' && t[2] == 'Y' && t[3] == ' ';
+}
 static void kt_reset(void)
 {
     uint32_t k;

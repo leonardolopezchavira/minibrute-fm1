@@ -368,13 +368,14 @@ static void smk__key_event(uint32_t k, uint32_t vel)     /* vel 0 = release */
  * an outer key's goes out as a release and a press. */
 #define SMK_NOVEL_VEL 100u
 static volatile uint8_t smk_novel;
-static volatile uint32_t smk_restrike;             /* note keys (bit n = note key n, F3 = 0) struck again while down */
+static volatile uint8_t smk_restrike[27];          /* each note key (F3 = 0): times struck again while down (the scan
+                                                   * the only writer; the reader keeps what it saw, no lock) */
 static uint8_t smk_rs_open[FM1_NKEY], smk_rs_c2[FM1_NKEY];
 static void smk__restrike(uint32_t k, uint32_t vel)
 {
     fm1_in.key_vel[k] = (uint8_t)vel;
     if (k >= SMK_KEY_F3 && k < SMK_KEY_F3 + 27u) {
-        smk_restrike |= 1u << (k - SMK_KEY_F3);
+        smk_restrike[k - SMK_KEY_F3]++;
         fm1_in.notes_pressed |= 1u << (k - SMK_KEY_F3);
     } else {
         smk__extq(k, 0);

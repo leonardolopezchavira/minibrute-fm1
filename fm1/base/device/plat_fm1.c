@@ -132,11 +132,15 @@ void plat_smk_contacts(uint64_t *c1, uint64_t *c2) { *c1 = smk_kt_c1; *c2 = smk_
 void plat_smk_velocity(int on) { smk_novel = on ? 0u : 1u; }
 uint32_t plat_smk_restrikes(void)
 {
-    uint32_t r;
-    __disable_irq();
-    r = smk_restrike;
-    smk_restrike = 0;
-    __enable_irq();
+    static uint8_t seen[27];
+    uint32_t n, r = 0;
+    for (n = 0; n < 27u; n++) {
+        uint8_t c = smk_restrike[n];
+        if (c != seen[n]) {
+            seen[n] = c;
+            r |= 1u << n;
+        }
+    }
     return r;
 }
 void plat_smk_volume(int pct) { smk_master = (pct < 0 ? 0 : pct > 100 ? 100 : pct) * 1023 / 100; }
