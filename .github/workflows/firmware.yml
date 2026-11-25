@@ -70,3 +70,9 @@ jobs:
           path: app/build/site
       - id: deploy
         uses: actions/deploy-pages@v4
+        continue-on-error: true   # (GitHub's artifact lookup fails now and then: a second try, a minute later)
+      - if: steps.deploy.outcome == 'failure'
+        run: sleep 60
+      - id: deploy2
+        if: steps.deploy.outcome == 'failure'
+        uses: actions/deploy-pages@v4
