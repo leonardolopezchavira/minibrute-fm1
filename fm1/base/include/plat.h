@@ -113,7 +113,8 @@ enum { PLAT_KT_PRESS, PLAT_KT_RELEASE, PLAT_KT_GRAZE, PLAT_KT_HALF };
 int plat_smk_keytest(uint32_t *ev, uint32_t *ms);   /* ms: when it happened (the scan's clock) */
 void plat_smk_contacts(uint64_t *c1, uint64_t *c2);
 void plat_smk_velocity(int on);          /* (MB-1) keys velocity sensitive (1, the stock scan) or not (0: at contact 1) */
-uint32_t plat_smk_restrikes(void);       /* (MB-1) note keys struck again while down, since the last call (bit n = F3+n) */         /* (MB-1) MASTER (K1's virtual pot) to pct %, 0..100 */
+uint32_t plat_smk_restrikes(void);
+uint32_t plat_smk_key_hits(void);        /* (MB-1) note keys pressed since the last call (bit k), even if let go again */       /* (MB-1) note keys struck again while down, since the last call (bit n = F3+n) */         /* (MB-1) MASTER (K1's virtual pot) to pct %, 0..100 */
 void plat_smk_k1_raw(int on);          /* (MB-1) 1: knob K1 is the app's (plat_smk_k1), MASTER stays where it is; 0: MASTER */
 int32_t plat_smk_k1(void);             /* (MB-1) K1's detents since the last call while raw, + = clockwise */
 uint64_t plat_keybed(void);            /* keybed keys held: bit k = key k (0 = C3) */

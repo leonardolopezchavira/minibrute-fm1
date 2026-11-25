@@ -131,6 +131,7 @@ int plat_smk_keytest(uint32_t *ev, uint32_t *ms)
 }
 void plat_smk_contacts(uint64_t *c1, uint64_t *c2) { *c1 = smk_kt_c1; *c2 = smk_kt_c2; }
 void plat_smk_velocity(int on) { smk_novel = on ? 0u : 1u; }
+uint32_t plat_smk_key_hits(void) { return fm1_input_note_edges() & ((1u << NKEYS) - 1u); }
 uint32_t plat_smk_restrikes(void)
 {
     static uint8_t seen[27];

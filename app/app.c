@@ -1783,6 +1783,7 @@ static uint32_t vol_pct(void) { return (plat_master() * 100u + 2048u) / 4096u; }
  * between two; the last events. FX on its page starts it again. */
 static struct {
     uint32_t press, graze, half, release;
+    uint32_t played;                         /* notes the synth started from the keys (presses that sounded) */
     uint32_t t_min, t_max, t_sum;            /* contact 1 to 2, 0.1 ms */
     uint32_t rep_min, run_min;               /* ms between presses: one key again, any two */
     uint32_t last_ms[SMK_NKEYBED], last_any; /* when (the scan's ms), | 1u<<31 once set */
@@ -1798,7 +1799,7 @@ static int ktest_page(void)                  /* the page after GLOBAL (no strcmp
 static void kt_reset(void)
 {
     uint32_t k;
-    kt.press = kt.graze = kt.half = kt.release = 0;
+    kt.press = kt.graze = kt.half = kt.release = kt.played = 0;
     kt.t_min = 0xFFFFFFFFu, kt.t_max = kt.t_sum = 0;
     kt.rep_min = kt.run_min = 0xFFFFFFFFu;
     for (k = 0; k < SMK_NKEYBED; k++)
@@ -1855,6 +1856,8 @@ static int outer_held(void)                  /* an outer key held (step entry: F
 
 static void smk_note(uint32_t note, uint32_t vel)
 {
+    if (vel)
+        kt.played++;
     post(vel ? Q_ON : Q_OFF, note, vel);
     plat_midi_send(vel ? 0x09u | 0x90u << 8 | note << 16 | vel << 24 : 0x08u | 0x80u << 8 | note << 16, TO_USB | TO_BLE);
 }
@@ -1979,7 +1982,11 @@ static void input(void)
 #if APP_SMK
     plat_smk_velocity(set.g[G_KEYS - NP] == 0u);   /* GLOBAL VEL SENS: YES (0) or NO (1) */
     {                                        /* a key struck again while down (repetition): off, then on again */
-        uint32_t rs = plat_smk_restrikes() & keys & ui.keys;
+        uint32_t hits = plat_smk_key_hits(), rs;    /* (a restrike by the scan is one of these too) */
+        /* a key pressed and let go (or let go and pressed again) since the last read: still a note. One already
+         * sounding: off, then on (as a restrike); one not: on now, off at the next read */
+        rs = hits & ui.keys;
+        keys |= hits;
         for (k = 0; k < NKEYS; k++)
             if (rs & (1u << k)) {
                 int32_t note = 53 + (int32_t)k + 12 * set.octave;
@@ -2002,6 +2009,9 @@ static void input(void)
 #endif
             ui.vel[k] = (uint8_t)v;
             key_strikes++;
+#if APP_SMK
+            kt.played++;
+#endif
             if (seq_rec && !seq_running) {   /* step entry: the key's note */
                 seq_step_write((uint32_t)note, v ? v : 1u, 0);
                 seq_key_note = note;
@@ -2611,9 +2621,17 @@ static void draw(void)
         text_cat(t, "  ANY ");
         if (kt.run_min != 0xFFFFFFFFu) { int_text((int32_t)kt.run_min, o); text_cat(t, o); text_cat(t, " MS"); } else text_cat(t, "-");
         cv_text(4, 98, &FONT_XS, t, C_GRAY);
-        for (k = 0; k < kt.nlog; k++) {      /* the last events, newest first */
+        t[0] = 0;                            /* what the synth played of them: fewer, lost after the scan */
+        text_cat(t, "PLAYED ");
+        int_text((int32_t)kt.played, o);
+        text_cat(t, o);
+        text_cat(t, " OF ");
+        int_text((int32_t)kt.press, o);
+        text_cat(t, o);
+        cv_text(4, 112, &FONT_XS, t, kt.played < kt.press ? C_ACCENT : C_WHITE);
+        for (k = 0; k < kt.nlog && k < 7u; k++) {   /* the last events, newest first */
             uint32_t ev = kt.log[k], kind = ev >> 30, key = (ev >> 24) & 63u, dt = ev & 0x1FFFFu, vel = (ev >> 17) & 127u;
-            int32_t y = 114 + (int32_t)k * 11, x;
+            int32_t y = 126 + (int32_t)k * 11, x;
             note_name(48 + (int32_t)key, o);
             cv_text(4, y, &FONT_XS, o, C_WHITE);
             cv_text(34, y, &FONT_XS, KIND[kind], kind == PLAT_KT_PRESS ? C_GRAY : C_ACCENT);
@@ -2877,6 +2895,8 @@ int app_expect(const char *what, int *got)
         *got = set.g[G_KEYS - NP] == 0u;
     else if (!strcmp(what, "ktpress"))
         *got = (int)kt.press;
+    else if (!strcmp(what, "ktplayed"))
+        *got = (int)kt.played;
     else if (!strcmp(what, "ktrep"))         /* the fastest repeat of one key, ms */
         *got = (int)kt.rep_min;
     else if (!strcmp(what, "ktgraze"))
