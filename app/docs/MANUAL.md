@@ -339,7 +339,7 @@ GLOBE = GLO, BT = SAVE, SEQ PLAY = PLAY, SEQ REC = REC), and it adds its own:
 | Volume | K1 on the pages; VOL at the foot of the screen; 50 % at power-on |
 | Keys | All 37 (C3..C6) with velocity; OCT- / OCT+ three octaves either way |
 | Wheels, pedal | Pitch bend, the mod wheel, sustain |
-| Key test | GLO pressed again: the keybed measured as you play (each key's two contacts, presses and the time between their contacts, grazes that play no note, half lifts, the fastest repeats, the last events); FX resets it |
+| Key test | GLO pressed again: the keybed measured as you play (each key's two contacts, presses and the time between their contacts, grazes that play no note, half lifts (the second contact bouncing open under 8 ms: no note; longer, a repeat, counted as a press), the fastest repeats, the last events); FX resets it |
 | VEL SENS | GLOBAL K8, VELOCITY SENSITIVE: YES (at power-on), notes as loud as they're struck, at the bottom of the travel; NO, every note the same, at the top of the travel (no light touch lost, each sounds sooner). Either way, a key lifted part way and struck again plays again (repetition) |
 | Pads | The white keys; while the sequencer plays, its steps (16 at a time: the step playing orange, notes white, ties dim orange) |
 

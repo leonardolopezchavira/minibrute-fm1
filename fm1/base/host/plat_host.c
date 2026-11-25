@@ -319,12 +319,13 @@ uint32_t plat_smk_button_hits(void)
     return hit;
 }
 void plat_smk_leds(uint32_t lit) { smk_led = lit; }
-static uint32_t smk_ktq_h[64], smk_ktq_hw, smk_ktq_hr;   /* (MB-1) the key test's events: script ktev */
+static uint32_t smk_ktq_h[64], smk_ktq_hat[64], smk_ktq_hw, smk_ktq_hr;   /* (MB-1) the key test's events: script ktev */
 static uint64_t smk_kt_hc1, smk_kt_hc2;
-int plat_smk_keytest(uint32_t *ev)
+int plat_smk_keytest(uint32_t *ev, uint32_t *ms)
 {
     if (smk_ktq_hr == smk_ktq_hw)
         return 0;
+    *ms = smk_ktq_hat[smk_ktq_hr % 64u];
     *ev = smk_ktq_h[smk_ktq_hr++ % 64u];
     return 1;
 }
@@ -2768,6 +2769,7 @@ int main(int argc, char **argv)
                 printf("line %d: no key-test kind %s\n", lineno, a);
                 return 2;
             }
+            smk_ktq_hat[smk_ktq_hw % 64u] = now_ms;
             smk_ktq_h[smk_ktq_hw++ % 64u] = (uint32_t)kind << 30 | (uint32_t)(key & 63) << 24 | (uint32_t)(vel & 127) << 17 |
                                              (uint32_t)(dt & 0x1FFFF);
             if (kind == 0)

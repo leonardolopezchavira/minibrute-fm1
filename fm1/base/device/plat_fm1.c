@@ -119,12 +119,13 @@ void plat_leds(uint32_t buttons, uint32_t keys)
     plat_lights(buttons, keys, 0, 0, 0);
 }
 static uint32_t smk_btn_seen;
-int plat_smk_keytest(uint32_t *ev)
+int plat_smk_keytest(uint32_t *ev, uint32_t *ms)
 {
     uint32_t r = smk_ktq_r;
     if (r == smk_ktq_w)
         return 0;
     *ev = smk_ktq[r % SMK_KTQ];
+    *ms = smk_ktq_at[r % SMK_KTQ];
     smk_ktq_r = r + 1u;
     return 1;
 }

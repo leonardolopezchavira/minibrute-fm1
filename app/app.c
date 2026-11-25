@@ -1785,7 +1785,7 @@ static struct {
     uint32_t press, graze, half, release;
     uint32_t t_min, t_max, t_sum;            /* contact 1 to 2, 0.1 ms */
     uint32_t rep_min, run_min;               /* ms between presses: one key again, any two */
-    uint32_t last_ms[SMK_NKEYBED], last_any;
+    uint32_t last_ms[SMK_NKEYBED], last_any; /* when (the scan's ms), | 1u<<31 once set */
     uint32_t log[8];                         /* the last events (not the releases), newest first */
     uint32_t nlog;
 } kt;
@@ -1808,8 +1808,8 @@ static void kt_reset(void)
 }
 static void kt_take(void)                     /* the scan's events (main loop) */
 {
-    uint32_t ev, now = plat_ms();
-    while (plat_smk_keytest(&ev)) {
+    uint32_t ev, now;
+    while (plat_smk_keytest(&ev, &now)) {   /* now: when the scan saw it, not when it is read here */
         uint32_t kind = ev >> 30, key = (ev >> 24) & 63u, dt = ev & 0x1FFFFu, j;
         if (key >= SMK_NKEYBED)
             continue;
@@ -1822,12 +1822,13 @@ static void kt_take(void)                     /* the scan's events (main loop) *
             kt.t_sum += dt;
             kt.t_min = dt < kt.t_min ? dt : kt.t_min;
             kt.t_max = dt > kt.t_max ? dt : kt.t_max;
-            if (kt.last_ms[key] && now - kt.last_ms[key] < kt.rep_min)
-                kt.rep_min = now - kt.last_ms[key];
-            if (kt.last_any && now - kt.last_any < kt.run_min && now - kt.last_any > 0u)
-                kt.run_min = now - kt.last_any;
-            kt.last_ms[key] = now;
-            kt.last_any = now;
+            now &= 0x7FFFFFFFu;
+            if (kt.last_ms[key] && ((now - kt.last_ms[key]) & 0x7FFFFFFFu) < kt.rep_min)
+                kt.rep_min = (now - kt.last_ms[key]) & 0x7FFFFFFFu;
+            if (kt.last_any && ((now - kt.last_any) & 0x7FFFFFFFu) < kt.run_min && ((now - kt.last_any) & 0x7FFFFFFFu))
+                kt.run_min = (now - kt.last_any) & 0x7FFFFFFFu;
+            kt.last_ms[key] = now | 1u << 31;
+            kt.last_any = now | 1u << 31;
         } else if (kind == PLAT_KT_GRAZE) {
             kt.graze++;
         } else {
@@ -2876,6 +2877,8 @@ int app_expect(const char *what, int *got)
         *got = set.g[G_KEYS - NP] == 0u;
     else if (!strcmp(what, "ktpress"))
         *got = (int)kt.press;
+    else if (!strcmp(what, "ktrep"))         /* the fastest repeat of one key, ms */
+        *got = (int)kt.rep_min;
     else if (!strcmp(what, "ktgraze"))
         *got = (int)kt.graze;
     else if (!strcmp(what, "kthalf"))

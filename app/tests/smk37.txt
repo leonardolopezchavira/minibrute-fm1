@@ -356,6 +356,7 @@ tap GLO
 wait 30
 expect ktpage 1
 ktev PRESS 12 87 34
+wait 25
 ktev RELEASE 12 0 600
 ktev PRESS 12 64 52
 ktev HALF 12 0 180
@@ -363,6 +364,7 @@ ktev GRAZE 14 0 150
 ktev PRESS 16 110 21
 wait 60
 expect ktpress 3
+expect ktrep 29
 expect kthalf 1
 expect ktgraze 1
 shot smk_keytest.png

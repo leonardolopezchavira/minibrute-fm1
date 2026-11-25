@@ -110,7 +110,7 @@ void plat_smk_volume(int pct);
 /* (MB-1) the key test: the next keybed event measured, packed kind << 30 | key << 24 | velocity << 17 | time in 0.1 ms
  * (1: one taken, 0: none); kinds below. And each key's two contacts as the scan reads them now (bit k = key k) */
 enum { PLAT_KT_PRESS, PLAT_KT_RELEASE, PLAT_KT_GRAZE, PLAT_KT_HALF };
-int plat_smk_keytest(uint32_t *ev);
+int plat_smk_keytest(uint32_t *ev, uint32_t *ms);   /* ms: when it happened (the scan's clock) */
 void plat_smk_contacts(uint64_t *c1, uint64_t *c2);
 void plat_smk_velocity(int on);          /* (MB-1) keys velocity sensitive (1, the stock scan) or not (0: at contact 1) */
 uint32_t plat_smk_restrikes(void);       /* (MB-1) note keys struck again while down, since the last call (bit n = F3+n) */         /* (MB-1) MASTER (K1's virtual pot) to pct %, 0..100 */
