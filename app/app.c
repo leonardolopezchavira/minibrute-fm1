@@ -349,8 +349,26 @@ static volatile uint32_t seq_cur_now;        /* the step playing, for the screen
 static seqpat_t *seq_pat(void) { return &sq.pat[set.g[G_SPAT - NP] % NPAT]; }
 static uint32_t seq_len(const seqpat_t *pt) { return pt->len < 1u ? 1u : pt->len > NSTEP ? NSTEP : pt->len; }
 
+/* The keys transpose the pattern while it plays, as on the MicroBrute: a key sets the shift from the pattern's first
+ * note (pressed, that note plays it as recorded) and it stays until the next key, or the next start. With REC armed
+ * the keys record as before. */
+static volatile int32_t seq_xpose;           /* semitones */
+static uint32_t seq_root(void)               /* the pattern's first note (C4 when it has none) */
+{
+    const seqpat_t *pt = seq_pat();
+    uint32_t i, L = seq_len(pt);
+    for (i = 0; i < L; i++)
+        if (pt->vel[i] && !(pt->flag[i] & SF_TIE))
+            return pt->note[i];
+    return 60u;
+}
+
 static void seq_sound(int32_t note, uint32_t vel)
 {
+    if (note >= 0) {                         /* (the transposition) */
+        note += seq_xpose;
+        note = note < 0 ? 0 : note > 127 ? 127 : note;
+    }
     if (seq.sounding >= 0)
         mb_note_off(&voice, (int)seq.sounding);
     seq.sounding = note;
@@ -370,8 +388,10 @@ static void seq_transport(uint32_t how)      /* 0 stop, 1 start (from the first 
     } else {
         arp_stop();                          /* (the arpeggiator rests while the sequencer plays) */
         seq_sound(-1, 0);
-        if (how == 1u)
+        if (how == 1u) {
             seq.pos = 0;
+            seq_xpose = 0;                   /* (a start: as recorded) */
+        }
         seq.run = 1;
         seq.phase = 0;
         seq.due = 0;
@@ -468,6 +488,11 @@ static void sustain(uint32_t on)             /* audio interrupt */
 
 static void note_play(uint32_t note, uint32_t vel)
 {
+    if (seq.run && !seq_rec) {               /* the sequencer playing: a key transposes it (and plays nothing) */
+        if (vel)
+            seq_xpose = (int32_t)note - (int32_t)seq_root();
+        return;
+    }
     if (seq.run && seq_rec)
         seq_record(note, vel);
     if (arp.state != 0u && !seq.run) {
@@ -1960,6 +1985,19 @@ static void input(void)
     } else if (pg_btn < NB && !(btn & 1u << pg_btn)) {
         pg_btn = 0xFFu;
     }
+    {
+        static int32_t xp_said;
+        int32_t x = seq_xpose;
+        if (x != xp_said && seq_running) {   /* the keys transposed the pattern */
+            char t[8];
+            t[0] = x < 0 ? '-' : '+';
+            int_text(x < 0 ? -x : x, t + 1);
+            app_say("TRANSPOSE", t);
+            xp_said = x;
+        } else if (!seq_running) {
+            xp_said = 0;
+        }
+    }
     if (seq_wrote) {                         /* recorded in time (the audio side) */
         seq_wrote = 0;
         sq_dirty = 1;
@@ -2629,6 +2667,8 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "vol"))
         *got = (int)vol_pct();
 #endif
+    else if (!strcmp(what, "xpose"))
+        *got = seq_xpose;
     else if (!strcmp(what, "sustain"))
         *got = sus_on ? 127 : 0;
     else if (!strcmp(what, "bend"))

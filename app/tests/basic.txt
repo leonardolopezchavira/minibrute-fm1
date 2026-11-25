@@ -1293,3 +1293,24 @@ expect_sysex F0 7D 4D 42 7F 0A 00 F7
 sysex F0 7D 4D 42 09 07 F7
 wait 50
 expect_sysex F0 7D 4D 42 09 07 03 30 37 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 3C 64 5A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 F7
+# the keys transpose the pattern while it plays (the MicroBrute's way): from its first note, until the next key
+tap PLAY
+wait 600
+expect seqrun 1
+expect xpose 0
+expect seqlast 60
+key 9 down 100
+wait 30
+key 9 up
+wait 1200
+expect xpose 2
+expect seqlast 62
+key 2 down 100
+wait 30
+key 2 up
+wait 1200
+expect xpose -5
+expect seqlast 55
+tap PLAY
+wait 30
+expect seqrun 0

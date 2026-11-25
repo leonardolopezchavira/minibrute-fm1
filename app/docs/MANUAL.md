@@ -147,15 +147,18 @@ distortion and chorus come before the delay and reverb (which hear them); the co
 
 ## The sequencer
 
-A 64-step monophonic step sequencer, after the KeyStep's (as on the MiniBrute 2), with 8 patterns. Each step is a
+A 64-step monophonic step sequencer, after the KeyStep's (as on the MiniBrute 2) and played as the MicroBrute's (the keys transpose it), with 8 patterns. Each step is a
 note with its velocity, a rest, or a tie (the note before goes on through it). It runs on the arpeggiator's clock:
 TEMPO, a tap (SEQ held + PLAY), or MIDI clock (USB, Bluetooth or TRS) while it comes; the LFO follows it too with
 LFO CLK on ARP.
 
 - **The SEQ page**: **PATTERN** 1..8, **LENGTH** 1..64 steps, **STEP** (1/4 .. 1/16T) and **SWING** (50..75 %), its own
   (not the arpeggiator's). A pattern changed while it plays takes over at the next step.
-- **PLAY** starts it from the first step and stops it. While it plays, the arpeggiator rests and the keys play over
-  it. MIDI Start, Continue and Stop run it too when the patch's arpeggiator is off.
+- **PLAY** starts it from the first step and stops it. While it plays the arpeggiator rests, and the keys
+  **transpose** the pattern, as on the MicroBrute: a key shifts it by its distance from the pattern's first note
+  (pressing that note plays it as recorded), and the shift stays until the next key; each start plays it as recorded
+  again. The keys play nothing then (with REC armed they record, as below). MIDI notes in transpose it the same way.
+  MIDI Start, Continue and Stop run it too when the patch's arpeggiator is off.
 - **Step entry**: stopped, press **REC** (lit; the screen shows REC and the step). Each key writes a step and moves on;
   **FX** writes a rest; holding the key and pressing **FX** writes a tie (the note goes on through that step). The
   pattern is as long as the steps entered (LENGTH changes it later). Press REC again to finish.

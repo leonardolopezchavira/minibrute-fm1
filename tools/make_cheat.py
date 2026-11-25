@@ -199,7 +199,7 @@ page = f"""<!DOCTYPE html>
       </table></section>
       <section><h2>Sequencer</h2><table class="kv">
         <tr><th>Size</th><td>64 steps &times; 8 patterns: note + velocity, rest or tie</td></tr>
-        <tr><th>Play</th><td>PLAY starts / stops; the keys play over it; the arpeggiator rests</td></tr>
+        <tr><th>Play</th><td>PLAY starts / stops; the keys transpose it (from its first note, until the next key)</td></tr>
         <tr><th>Record</th><td>REC stopped: step by step &middot; REC playing: in time &middot; REC held: cleared</td></tr>
       </table></section>
       <section><h2 class="hot">Factory bank A</h2><ul class="bank">{bank}</ul>
